@@ -216,7 +216,7 @@ function App() {
         </div>
         <div>
           <label style={labelStyle}>เวลาปฏิบัติหน้าที่</label>
-          <input type="text" placeholder="เช่น 06.30 น." value={data.dutyTime} className="input-field"
+          <input type="time" value={data.dutyTime} className="input-field"
             onChange={e => setData(p => ({ ...p, dutyTime: e.target.value }))} />
         </div>
       </div>
