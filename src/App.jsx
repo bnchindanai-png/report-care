@@ -288,7 +288,7 @@ function App() {
   };
 
   /* ─── FORM FIELDS ─── */
-  const FormFields = ({ data, setData }) => (
+  const renderFormFields = (data, setData) => (
     <div style={{ display: 'grid', gap: '20px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
         <div>
@@ -397,10 +397,10 @@ function App() {
   );
 
   /* ─── REPORT CARD ─── */
-  const ReportCard = ({ record, showActions }) => {
+  const renderReportCard = (record, showActions) => {
     const imageUrls = parseImageUrls(record.imageUrl);
     return (
-      <div className="report-item">
+      <div key={record.id} className="report-item">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, paddingBottom: 15, borderBottom: `2px solid ${LIGHT_BLUE}`, flexWrap: 'wrap', gap: 10 }}>
           <span style={{ color: DARK_BLUE, fontWeight: 700, fontSize: 18 }}>
             วันที่ {convertDateToThai(record.reportDate)}
@@ -426,12 +426,12 @@ function App() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 15, marginBottom: 15 }}>
-          <FieldItem label="ผู้ปฏิบัติหน้าที่" value={record.staffName} />
-          <FieldItem label="ตำแหน่ง" value={record.position} />
-          <FieldItem label="สถานที่" value={record.location} />
-          <FieldItem label="กิจกรรมที่ปฏิบัติ" value={record.activity} />
-          {record.eventDetail && <FieldItem label="เหตุการณ์และรายละเอียด" value={record.eventDetail} />}
-          {record.note        && <FieldItem label="หมายเหตุ" value={record.note} />}
+          {renderFieldItem("ผู้ปฏิบัติหน้าที่", record.staffName)}
+          {renderFieldItem("ตำแหน่ง", record.position)}
+          {renderFieldItem("สถานที่", record.location)}
+          {renderFieldItem("กิจกรรมที่ปฏิบัติ", record.activity)}
+          {record.eventDetail && renderFieldItem("เหตุการณ์และรายละเอียด", record.eventDetail)}
+          {record.note        && renderFieldItem("หมายเหตุ", record.note)}
         </div>
 
         {imageUrls.length > 0 && (
@@ -452,7 +452,7 @@ function App() {
     );
   };
 
-  const FieldItem = ({ label, value }) => (
+  const renderFieldItem = (label, value) => (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <span style={{ fontWeight: 600, color: DARK_BLUE, fontSize: 14, marginBottom: 4 }}>{label}</span>
       <span style={{ color: '#333', fontSize: 16, whiteSpace: 'pre-wrap' }}>{value || '-'}</span>
@@ -466,12 +466,12 @@ function App() {
   });
 
   /* ─── POPUP WRAPPER ─── */
-  const Popup = ({ show, wide, children }) => !show ? null : (
+  const renderPopup = (show, wide, content) => !show ? null : (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onClick={e => { if (e.target === e.currentTarget) e.stopPropagation(); }}>
       <div style={{ background: 'white', padding: 30, borderRadius: 15, maxWidth: wide ? 700 : 500, width: '100%', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', maxHeight: '90vh', overflowY: 'auto' }}
         onClick={e => e.stopPropagation()}>
-        {children}
+        {content}
       </div>
     </div>
   );
@@ -533,7 +533,7 @@ function App() {
         {activeTab === 'create' && (
           <>
             <h2 style={h2Style}>เพิ่มรายงานใหม่</h2>
-            <FormFields data={formData} setData={setFormData} />
+            {renderFormFields(formData, setFormData)}
             <button className="save-btn" onClick={handleSubmit} disabled={submitting}>
               {submitting ? 'กำลังบันทึก...' : 'บันทึกรายงาน'}
             </button>
@@ -548,7 +548,7 @@ function App() {
               </button>
             </div>
             <div style={countStyle}>{`จำนวนรายงานทั้งหมด ${dataRecords.length} รายการ`}</div>
-            {dataRecords.length === 0 ? <NoData /> : dataRecords.map(r => <ReportCard key={r.id} record={r} showActions={false} />)}
+            {dataRecords.length === 0 ? <NoData /> : dataRecords.map(r => renderReportCard(r, false))}
           </>
         )}
 
@@ -566,20 +566,20 @@ function App() {
               </button>
             </div>
             <div style={countStyle}>{`จำนวนรายงานวันที่ ${convertDateToThai(filterDate)} มี ${filteredData.length} รายการ`}</div>
-            {filteredData.length === 0 ? <NoData /> : filteredData.map(r => <ReportCard key={r.id} record={r} showActions={false} />)}
+            {filteredData.length === 0 ? <NoData /> : filteredData.map(r => renderReportCard(r, false))}
           </>
         )}
 
         {activeTab === 'admin' && (
           <>
             <div style={countStyle}>{`จำนวนรายงานทั้งหมด ${dataRecords.length} รายการ`}</div>
-            {dataRecords.length === 0 ? <NoData /> : dataRecords.map(r => <ReportCard key={r.id} record={r} showActions={true} />)}
+            {dataRecords.length === 0 ? <NoData /> : dataRecords.map(r => renderReportCard(r, true))}
           </>
         )}
       </div>
 
       {/* ══ ACKNOWLEDGE ══ */}
-      <Popup show={showAckPopup}>
+      {renderPopup(showAckPopup, false, <>
         <h3 style={popH3}>ยืนยันการรับทราบรายงาน</h3>
         <p style={{ color: '#666', marginBottom: 20 }}>กรุณาใส่รหัสผ่านผู้อำนวยการเพื่อยืนยัน</p>
         {selectedRecord && (
@@ -596,13 +596,13 @@ function App() {
           onChange={e => setDirectorPwd(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && executeAck()} />
         {popupActions(() => { setShowAckPopup(false); setDirectorPwd(''); setSelectedRecord(null); }, executeAck, 'ยืนยันการรับทราบ')}
-      </Popup>
+      </>)}
 
       {/* ══ EDIT ══ */}
-      <Popup show={showEditPopup} wide>
+      {renderPopup(showEditPopup, true, <>
         <div style={{ maxWidth: '100%' }}>
           <h3 style={popH3}>แก้ไขรายงาน</h3>
-          <FormFields data={editFormData} setData={setEditFormData} />
+          {renderFormFields(editFormData, setEditFormData)}
           <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${LIGHT_BLUE}` }}>
             <label style={labelStyle}>รหัสผ่าน <span style={{ color: '#f44336' }}>*</span></label>
             <input type="password" className="input-field" value={password}
@@ -614,10 +614,10 @@ function App() {
             executeEdit, submitting ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'
           )}
         </div>
-      </Popup>
+      </>)}
 
       {/* ══ PRINT DATE RANGE ══ */}
-      <Popup show={showPrintPopup}>
+      {renderPopup(showPrintPopup, false, <>
         <h3 style={popH3}>เลือกช่วงวันที่พิมพ์รายงาน</h3>
         <div style={{ display: 'grid', gap: 16 }}>
           <div>
@@ -635,7 +635,7 @@ function App() {
           () => setShowPrintPopup(false),
           executePrint, 'พิมพ์รายงาน'
         )}
-      </Popup>
+      </>)}
 
       {/* ══ PRINT VIEW (only visible during printing) ══ */}
       {printData && (
@@ -705,7 +705,7 @@ function App() {
       )}
 
       {/* ══ DELETE ══ */}
-      <Popup show={showDeletePopup}>
+      {renderPopup(showDeletePopup, false, <>
         <h3 style={popH3}>ยืนยันการลบรายงาน</h3>
         <p style={{ color: '#666', marginBottom: 16 }}>การลบไม่สามารถย้อนกลับได้</p>
         {selectedRecord && (
@@ -724,7 +724,7 @@ function App() {
           () => { setShowDeletePopup(false); setSelectedRecord(null); setPassword(''); },
           executeDelete, 'ยืนยันการลบ', true
         )}
-      </Popup>
+      </>)}
     </div>
   );
 }
