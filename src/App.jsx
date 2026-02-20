@@ -1,25 +1,60 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 
-const TABLE = 'news_re_duty_reports';
+const TABLE = 'feed_posts';
 const BUCKET = 'report-images';
 const SECRET_PASSWORD = '123456';
 const DIRECTOR_PASSWORD = '789012';
 const MAX_IMAGES = 4;
 
-const BLUE      = '#2196F3';
-const DARK_BLUE = '#1976D2';
+const BLUE       = '#2196F3';
+const DARK_BLUE  = '#1976D2';
 const LIGHT_BLUE = '#E3F2FD';
 
-/* parse image_url column → array of URLs (backward compat with old single URL) */
-const parseImageUrls = (imageUrl) => {
-  if (!imageUrl) return [];
-  try {
-    const parsed = JSON.parse(imageUrl);
-    if (Array.isArray(parsed)) return parsed.filter(Boolean);
-  } catch { /* not JSON */ }
-  return [imageUrl];
+/* ─── field mapping helpers ─── */
+
+// tags = ["report_date:2024-01-15", "duty_time:08:00"]
+const buildTags = (form) => {
+  const tags = [];
+  if (form.reportDate) tags.push(`report_date:${form.reportDate}`);
+  if (form.dutyTime)   tags.push(`duty_time:${form.dutyTime}`);
+  return tags;
 };
+
+const extractTag = (tags, key) => {
+  if (!Array.isArray(tags)) return '';
+  const found = tags.find(t => String(t).startsWith(`${key}:`));
+  return found ? String(found).substring(key.length + 1) : '';
+};
+
+// description stores event_detail + note in readable format
+const buildDescription = (form) => {
+  const parts = [];
+  if (form.eventDetail) parts.push(form.eventDetail);
+  if (form.note)        parts.push(`หมายเหตุ: ${form.note}`);
+  return parts.length > 0 ? parts.join('\n') : (form.activity || '-');
+};
+
+const parseDescription = (desc) => {
+  if (!desc) return { eventDetail: '', note: '' };
+  const sep = '\nหมายเหตุ: ';
+  const idx = desc.indexOf(sep);
+  if (idx === -1) return { eventDetail: desc, note: '' };
+  return { eventDetail: desc.substring(0, idx), note: desc.substring(idx + sep.length) };
+};
+
+// images column is jsonb array in feed_posts
+const parseImageUrls = (images) => {
+  if (!images) return [];
+  if (Array.isArray(images)) return images.filter(Boolean);
+  try {
+    const p = JSON.parse(images);
+    if (Array.isArray(p)) return p.filter(Boolean);
+  } catch { /* not json */ }
+  return [images];
+};
+
+/* ════════════════════════════════════════════ */
 
 function App() {
   const [activeTab, setActiveTab] = useState('create');
@@ -39,7 +74,7 @@ function App() {
   const emptyForm = {
     reportDate: '', dutyTime: '', staffName: '', position: '',
     location: '', activity: '', eventDetail: '', note: '',
-    images: [], // array of { file: File|null, preview: string, existingUrl: string|null }
+    images: [], // { file, preview, existingUrl }
   };
   const [formData,     setFormData]     = useState(emptyForm);
   const [editFormData, setEditFormData] = useState(emptyForm);
@@ -73,15 +108,34 @@ function App() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from(TABLE).select('*').order('report_date', { ascending: false });
+      const { data, error } = await supabase
+        .from(TABLE).select('*').order('created_at', { ascending: false });
       if (error) throw error;
-      setDataRecords((data || []).map(r => ({
-        id: r.id, reportDate: r.report_date, dutyTime: r.duty_time,
-        staffName: r.staff_name, position: r.position, location: r.location,
-        activity: r.activity, eventDetail: r.event_detail, note: r.note,
-        imageUrl: r.image_url, acknowledged: r.acknowledged, timestamp: r.timestamp,
-      })));
-    } catch { showNotif('เกิดข้อผิดพลาดในการโหลดข้อมูล', 'error'); }
+
+      setDataRecords((data || []).map(r => {
+        const tags = Array.isArray(r.tags) ? r.tags : [];
+        const { eventDetail, note } = parseDescription(r.description);
+        return {
+          id:          r.id,
+          reportDate:  extractTag(tags, 'report_date') || (r.created_at ? r.created_at.split('T')[0] : ''),
+          dutyTime:    extractTag(tags, 'duty_time'),
+          staffName:   r.author_name     || '',
+          position:    r.author_position || '',
+          location:    r.location ? (r.location.name || '') : '',
+          activity:    r.title || '',
+          eventDetail,
+          note,
+          imageUrl:    Array.isArray(r.images) && r.images.length > 0
+                         ? JSON.stringify(r.images.filter(Boolean))
+                         : '',
+          acknowledged:   !!r.acknowledged_at,
+          acknowledgedAt: r.acknowledged_at,
+          timestamp:      r.created_at,
+        };
+      }));
+    } catch (e) {
+      showNotif('เกิดข้อผิดพลาดในการโหลดข้อมูล: ' + (e.message || ''), 'error');
+    }
     finally { setLoading(false); }
   };
 
@@ -93,27 +147,23 @@ function App() {
     return supabase.storage.from(BUCKET).getPublicUrl(name).data.publicUrl;
   };
 
-  /* upload all images in an images array, returns JSON string of URL array */
+  /* returns plain URL array for feed_posts.images (jsonb) */
   const uploadAllImages = async (images) => {
     const urls = [];
     for (const img of images) {
-      if (img.file) {
-        urls.push(await uploadImage(img.file));
-      } else if (img.existingUrl) {
-        urls.push(img.existingUrl);
-      }
+      if (img.file)         urls.push(await uploadImage(img.file));
+      else if (img.existingUrl) urls.push(img.existingUrl);
     }
-    return urls.length > 0 ? JSON.stringify(urls) : '';
+    return urls;
   };
 
-  /* ─── add image to a form's images array ─── */
+  /* ─── add / remove image ─── */
   const addImageToForm = (setter, file) => {
     setter(p => {
       if (p.images.length >= MAX_IMAGES) return p;
       return { ...p, images: [...p.images, { file, preview: URL.createObjectURL(file), existingUrl: null }] };
     });
   };
-
   const removeImageFromForm = (setter, idx) => {
     setter(p => ({ ...p, images: p.images.filter((_, i) => i !== idx) }));
   };
@@ -125,19 +175,22 @@ function App() {
     }
     setSubmitting(true);
     try {
-      const image_url = await uploadAllImages(formData.images);
+      const images = await uploadAllImages(formData.images);
       const { error } = await supabase.from(TABLE).insert([{
-        report_date: formData.reportDate, duty_time: formData.dutyTime,
-        staff_name: formData.staffName,   position:   formData.position,
-        location:   formData.location,    activity:   formData.activity,
-        event_detail: formData.eventDetail, note: formData.note,
-        image_url, acknowledged: false,
+        title:           formData.activity,
+        description:     buildDescription(formData),
+        category:        'รายงานหน้าที่',
+        tags:            buildTags(formData),
+        author_name:     formData.staffName,
+        author_position: formData.position,
+        images:          images,
+        location:        formData.location ? { name: formData.location } : null,
       }]);
       if (error) throw error;
       showNotif('บันทึกรายงานสำเร็จ', 'success');
       setFormData({ ...emptyForm, reportDate: getCurrentDate() });
       await loadAllData();
-    } catch { showNotif('เกิดข้อผิดพลาดในการบันทึก', 'error'); }
+    } catch (e) { showNotif('เกิดข้อผิดพลาดในการบันทึก: ' + (e.message || ''), 'error'); }
     finally { setSubmitting(false); }
   };
 
@@ -145,11 +198,13 @@ function App() {
   const executeAck = async () => {
     if (directorPwd !== DIRECTOR_PASSWORD) { showNotif('รหัสผ่านผู้อำนวยการไม่ถูกต้อง', 'error'); return; }
     try {
-      const { error } = await supabase.from(TABLE).update({ acknowledged: true }).eq('id', selectedRecord.id);
+      const { error } = await supabase.from(TABLE)
+        .update({ acknowledged_at: new Date().toISOString() })
+        .eq('id', selectedRecord.id);
       if (error) throw error;
       showNotif('รับทราบรายงานสำเร็จ', 'success');
       setShowAckPopup(false); setDirectorPwd(''); await loadAllData();
-    } catch { showNotif('เกิดข้อผิดพลาดในการรับทราบ', 'error'); }
+    } catch (e) { showNotif('เกิดข้อผิดพลาดในการรับทราบ: ' + (e.message || ''), 'error'); }
   };
 
   /* ─── EDIT ─── */
@@ -157,11 +212,10 @@ function App() {
     setSelectedRecord(r);
     const existingUrls = parseImageUrls(r.imageUrl);
     setEditFormData({
-      reportDate:   r.reportDate ? String(r.reportDate).split('T')[0] : '',
-      dutyTime:     r.dutyTime     || '', staffName:  r.staffName  || '',
-      position:     r.position     || '', location:   r.location   || '',
-      activity:     r.activity     || '', eventDetail: r.eventDetail || '',
-      note:         r.note         || '',
+      reportDate:   r.reportDate  || '', dutyTime:    r.dutyTime    || '',
+      staffName:    r.staffName   || '', position:    r.position    || '',
+      location:     r.location    || '', activity:    r.activity    || '',
+      eventDetail:  r.eventDetail || '', note:        r.note        || '',
       images: existingUrls.map(url => ({ file: null, preview: url, existingUrl: url })),
     });
     setPassword(''); setShowEditPopup(true);
@@ -171,19 +225,23 @@ function App() {
     if (password !== SECRET_PASSWORD) { showNotif('รหัสผ่านไม่ถูกต้อง', 'error'); return; }
     setSubmitting(true);
     try {
-      const image_url = await uploadAllImages(editFormData.images);
+      const images = await uploadAllImages(editFormData.images);
       const { error } = await supabase.from(TABLE).update({
-        report_date: editFormData.reportDate,  duty_time:    editFormData.dutyTime,
-        staff_name:  editFormData.staffName,   position:     editFormData.position,
-        location:    editFormData.location,    activity:     editFormData.activity,
-        event_detail: editFormData.eventDetail, note:        editFormData.note,
-        image_url,
+        title:           editFormData.activity,
+        description:     buildDescription(editFormData),
+        category:        'รายงานหน้าที่',
+        tags:            buildTags(editFormData),
+        author_name:     editFormData.staffName,
+        author_position: editFormData.position,
+        images:          images,
+        location:        editFormData.location ? { name: editFormData.location } : null,
+        updated_at:      new Date().toISOString(),
       }).eq('id', selectedRecord.id);
       if (error) throw error;
       showNotif('แก้ไขรายงานสำเร็จ', 'success');
       setShowEditPopup(false); setSelectedRecord(null); setPassword('');
       await loadAllData();
-    } catch { showNotif('เกิดข้อผิดพลาดในการแก้ไข', 'error'); }
+    } catch (e) { showNotif('เกิดข้อผิดพลาดในการแก้ไข: ' + (e.message || ''), 'error'); }
     finally { setSubmitting(false); }
   };
 
@@ -198,7 +256,7 @@ function App() {
       showNotif('ลบรายงานสำเร็จ', 'success');
       setShowDeletePopup(false); setSelectedRecord(null); setPassword('');
       await loadAllData();
-    } catch { showNotif('เกิดข้อผิดพลาดในการลบ', 'error'); }
+    } catch (e) { showNotif('เกิดข้อผิดพลาดในการลบ: ' + (e.message || ''), 'error'); }
   };
 
   /* ─── PRINT ─── */
@@ -207,10 +265,9 @@ function App() {
   /* ─── FORM FIELDS ─── */
   const FormFields = ({ data, setData }) => (
     <div style={{ display: 'grid', gap: '20px' }}>
-      {/* Row 1 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
         <div>
-          <label style={labelStyle}>วันที่ <span style={{ color: '#f44336', fontSize: 14 }}>บังคับกรอก</span></label>
+          <label style={labelStyle}>วันที่ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
           <input type="date" value={data.reportDate} className="input-field"
             onChange={e => setData(p => ({ ...p, reportDate: e.target.value }))} />
         </div>
@@ -221,52 +278,47 @@ function App() {
         </div>
       </div>
 
-      {/* Row 2 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
         <div>
-          <label style={labelStyle}>รายชื่อผู้ปฏิบัติหน้าที่ <span style={{ color: '#f44336', fontSize: 14 }}>บังคับกรอก</span></label>
-          <input type="text" placeholder="กรุณาระบุชื่อและนามสกุล" value={data.staffName} className="input-field"
+          <label style={labelStyle}>รายชื่อผู้ปฏิบัติหน้าที่ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+          <input type="text" placeholder="ชื่อและนามสกุล" value={data.staffName} className="input-field"
             onChange={e => setData(p => ({ ...p, staffName: e.target.value }))} />
         </div>
         <div>
           <label style={labelStyle}>ตำแหน่ง</label>
-          <input type="text" placeholder="กรุณาระบุตำแหน่ง" value={data.position} className="input-field"
+          <input type="text" placeholder="ตำแหน่ง" value={data.position} className="input-field"
             onChange={e => setData(p => ({ ...p, position: e.target.value }))} />
         </div>
       </div>
 
-      {/* Location */}
       <div>
         <label style={labelStyle}>สถานที่</label>
         <input type="text" placeholder="กรุณาระบุสถานที่" value={data.location} className="input-field"
           onChange={e => setData(p => ({ ...p, location: e.target.value }))} />
       </div>
 
-      {/* Activity */}
       <div>
-        <label style={labelStyle}>กิจกรรมที่ปฏิบัติ <span style={{ color: '#f44336', fontSize: 14 }}>บังคับกรอก</span></label>
+        <label style={labelStyle}>กิจกรรมที่ปฏิบัติ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
         <textarea placeholder="กรุณาระบุกิจกรรมที่ปฏิบัติ" value={data.activity} rows={3} className="input-field"
           style={{ resize: 'vertical', minHeight: 100 }}
           onChange={e => setData(p => ({ ...p, activity: e.target.value }))} />
       </div>
 
-      {/* Event Detail */}
       <div>
         <label style={labelStyle}>เหตุการณ์และรายละเอียด</label>
-        <textarea placeholder="กรุณาระบุเหตุการณ์หรือรายละเอียดเพิ่มเติม ถ้ามี" value={data.eventDetail} rows={3} className="input-field"
+        <textarea placeholder="รายละเอียดเพิ่มเติม ถ้ามี" value={data.eventDetail} rows={3} className="input-field"
           style={{ resize: 'vertical', minHeight: 100 }}
           onChange={e => setData(p => ({ ...p, eventDetail: e.target.value }))} />
       </div>
 
-      {/* Note */}
       <div>
         <label style={labelStyle}>หมายเหตุ</label>
-        <textarea placeholder="กรุณาระบุหมายเหตุ ถ้ามี" value={data.note} rows={2} className="input-field"
+        <textarea placeholder="หมายเหตุ ถ้ามี" value={data.note} rows={2} className="input-field"
           style={{ resize: 'vertical' }}
           onChange={e => setData(p => ({ ...p, note: e.target.value }))} />
       </div>
 
-      {/* Multi-image upload */}
+      {/* Multi-image */}
       <div>
         <label style={labelStyle}>
           รูปภาพ
@@ -275,21 +327,16 @@ function App() {
           </span>
         </label>
 
-        {/* preview grid */}
         {data.images.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10, marginBottom: 12 }}>
             {data.images.map((img, idx) => (
               <div key={idx} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: `2px solid ${LIGHT_BLUE}` }}>
                 <img src={img.preview} alt={`รูปที่ ${idx + 1}`}
                   style={{ width: '100%', height: 130, objectFit: 'cover', display: 'block' }} />
-                <button
-                  onClick={() => removeImageFromForm(setData, idx)}
-                  style={{
-                    position: 'absolute', top: 5, right: 5,
-                    background: 'rgba(244,67,54,0.9)', color: 'white', border: 'none',
-                    borderRadius: '50%', width: 26, height: 26, cursor: 'pointer',
-                    fontSize: 14, fontWeight: 700, lineHeight: '26px', padding: 0,
-                  }}>×</button>
+                <button onClick={() => removeImageFromForm(setData, idx)}
+                  style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(244,67,54,0.9)', color: 'white', border: 'none', borderRadius: '50%', width: 26, height: 26, cursor: 'pointer', fontSize: 14, fontWeight: 700, lineHeight: '26px', padding: 0 }}>
+                  ×
+                </button>
                 <div style={{ background: 'rgba(0,0,0,0.5)', color: 'white', fontSize: 12, padding: '4px 8px', textAlign: 'center' }}>
                   รูปที่ {idx + 1}
                 </div>
@@ -298,27 +345,24 @@ function App() {
           </div>
         )}
 
-        {/* upload zone – only show when under limit */}
         {data.images.length < MAX_IMAGES && (
           <label style={uploadZoneStyle}
             onDragOver={e => { e.preventDefault(); e.currentTarget.style.background = LIGHT_BLUE; }}
             onDragLeave={e => { e.currentTarget.style.background = ''; }}
             onDrop={e => {
               e.preventDefault(); e.currentTarget.style.background = '';
-              const files = Array.from(e.dataTransfer.files).slice(0, MAX_IMAGES - data.images.length);
-              files.forEach(f => addImageToForm(setData, f));
+              Array.from(e.dataTransfer.files)
+                .slice(0, MAX_IMAGES - data.images.length)
+                .forEach(f => addImageToForm(setData, f));
             }}>
             <div style={{ fontSize: 40, marginBottom: 8 }}>📷</div>
-            <div style={{ color: '#666', fontSize: 15 }}>
-              คลิกหรือลากรูปมาวางที่นี่
-            </div>
-            <div style={{ color: '#aaa', fontSize: 13, marginTop: 4 }}>
-              เพิ่มได้อีก {MAX_IMAGES - data.images.length} รูป
-            </div>
+            <div style={{ color: '#666', fontSize: 15 }}>คลิกหรือลากรูปมาวางที่นี่</div>
+            <div style={{ color: '#aaa', fontSize: 13, marginTop: 4 }}>เพิ่มได้อีก {MAX_IMAGES - data.images.length} รูป</div>
             <input type="file" accept="image/*" multiple style={{ display: 'none' }}
               onChange={e => {
-                const files = Array.from(e.target.files).slice(0, MAX_IMAGES - data.images.length);
-                files.forEach(f => addImageToForm(setData, f));
+                Array.from(e.target.files)
+                  .slice(0, MAX_IMAGES - data.images.length)
+                  .forEach(f => addImageToForm(setData, f));
                 e.target.value = '';
               }} />
           </label>
@@ -332,10 +376,10 @@ function App() {
     const imageUrls = parseImageUrls(record.imageUrl);
     return (
       <div className="report-item">
-        {/* Top row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, paddingBottom: 15, borderBottom: `2px solid ${LIGHT_BLUE}`, flexWrap: 'wrap', gap: 10 }}>
           <span style={{ color: DARK_BLUE, fontWeight: 700, fontSize: 18 }}>
-            วันที่ {convertDateToThai(record.reportDate)} เวลา {record.dutyTime || 'ไม่ระบุเวลา'}
+            วันที่ {convertDateToThai(record.reportDate)}
+            {record.dutyTime && ` เวลา ${record.dutyTime} น.`}
           </span>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             {record.acknowledged && (
@@ -356,7 +400,6 @@ function App() {
           </div>
         </div>
 
-        {/* Fields grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 15, marginBottom: 15 }}>
           <FieldItem label="ผู้ปฏิบัติหน้าที่" value={record.staffName} />
           <FieldItem label="ตำแหน่ง" value={record.position} />
@@ -366,7 +409,6 @@ function App() {
           {record.note        && <FieldItem label="หมายเหตุ" value={record.note} />}
         </div>
 
-        {/* Images */}
         {imageUrls.length > 0 && (
           <div style={{ marginTop: 15 }}>
             <div style={{ color: DARK_BLUE, fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
@@ -418,7 +460,6 @@ function App() {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px' }}>
 
-      {/* Toast */}
       {toast.show && (
         <div className="toast-slide hide-print" style={{
           position: 'fixed', top: 20, right: 20, zIndex: 1000, minWidth: 300,
@@ -430,7 +471,6 @@ function App() {
         </div>
       )}
 
-      {/* Full-screen spinner */}
       {loading && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(255,255,255,0.9)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ textAlign: 'center' }}>
@@ -461,10 +501,8 @@ function App() {
         ))}
       </div>
 
-      {/* Page content */}
       <div style={{ background: 'white', padding: 30, borderRadius: 15, boxShadow: '0 2px 15px rgba(0,0,0,0.08)' }}>
 
-        {/* ── CREATE ── */}
         {activeTab === 'create' && (
           <>
             <h2 style={h2Style}>เพิ่มรายงานใหม่</h2>
@@ -475,7 +513,6 @@ function App() {
           </>
         )}
 
-        {/* ── ALL ── */}
         {activeTab === 'all' && (
           <>
             <div style={{ marginBottom: 20 }}>
@@ -488,7 +525,6 @@ function App() {
           </>
         )}
 
-        {/* ── DAILY ── */}
         {activeTab === 'daily' && (
           <>
             <div className="hide-print" style={{ display: 'flex', gap: 15, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -507,7 +543,6 @@ function App() {
           </>
         )}
 
-        {/* ── ADMIN ── */}
         {activeTab === 'admin' && (
           <>
             <div style={countStyle}>{`จำนวนรายงานทั้งหมด ${dataRecords.length} รายการ`}</div>
@@ -516,12 +551,12 @@ function App() {
         )}
       </div>
 
-      {/* ══ ACKNOWLEDGE POPUP ══ */}
+      {/* ══ ACKNOWLEDGE ══ */}
       <Popup show={showAckPopup}>
         <h3 style={popH3}>ยืนยันการรับทราบรายงาน</h3>
         <p style={{ color: '#666', marginBottom: 20 }}>กรุณาใส่รหัสผ่านผู้อำนวยการเพื่อยืนยัน</p>
         {selectedRecord && (
-          <div style={{ background: '#fff3e0', padding: '15px', borderRadius: 8, borderLeft: '4px solid #FF9800', marginBottom: 20, fontSize: 15 }}>
+          <div style={{ background: '#fff3e0', padding: 15, borderRadius: 8, borderLeft: '4px solid #FF9800', marginBottom: 20, fontSize: 15 }}>
             <div><strong>วันที่:</strong> {convertDateToThai(selectedRecord.reportDate)}</div>
             <div><strong>เวลา:</strong> {selectedRecord.dutyTime || '-'}</div>
             <div><strong>ผู้ปฏิบัติหน้าที่:</strong> {selectedRecord.staffName}</div>
@@ -536,7 +571,7 @@ function App() {
         {popupActions(() => { setShowAckPopup(false); setDirectorPwd(''); setSelectedRecord(null); }, executeAck, 'ยืนยันการรับทราบ')}
       </Popup>
 
-      {/* ══ EDIT POPUP ══ */}
+      {/* ══ EDIT ══ */}
       <Popup show={showEditPopup}>
         <div style={{ maxWidth: '100%' }}>
           <h3 style={popH3}>แก้ไขรายงาน</h3>
@@ -549,13 +584,12 @@ function App() {
           </div>
           {popupActions(
             () => { setShowEditPopup(false); setSelectedRecord(null); setPassword(''); },
-            executeEdit,
-            submitting ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'
+            executeEdit, submitting ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'
           )}
         </div>
       </Popup>
 
-      {/* ══ DELETE POPUP ══ */}
+      {/* ══ DELETE ══ */}
       <Popup show={showDeletePopup}>
         <h3 style={popH3}>ยืนยันการลบรายงาน</h3>
         <p style={{ color: '#666', marginBottom: 16 }}>การลบไม่สามารถย้อนกลับได้</p>
@@ -581,10 +615,10 @@ function App() {
 }
 
 /* ─── style helpers ─── */
-const labelStyle = { display: 'block', marginBottom: 8, fontWeight: 600, color: '#1976D2', fontSize: 16 };
-const h2Style    = { color: '#1976D2', marginBottom: 25, fontSize: 26, fontWeight: 700 };
-const countStyle = { textAlign: 'center', padding: 15, background: '#E3F2FD', borderRadius: 10, marginBottom: 20, fontSize: 18, fontWeight: 600, color: '#1976D2' };
-const popH3      = { color: '#1976D2', marginBottom: 20, fontSize: 22, fontWeight: 700 };
+const labelStyle    = { display: 'block', marginBottom: 8, fontWeight: 600, color: '#1976D2', fontSize: 16 };
+const h2Style       = { color: '#1976D2', marginBottom: 25, fontSize: 26, fontWeight: 700 };
+const countStyle    = { textAlign: 'center', padding: 15, background: '#E3F2FD', borderRadius: 10, marginBottom: 20, fontSize: 18, fontWeight: 600, color: '#1976D2' };
+const popH3         = { color: '#1976D2', marginBottom: 20, fontSize: 22, fontWeight: 700 };
 const uploadZoneStyle = {
   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
   border: '2px dashed #BBDEFB', borderRadius: 8, padding: 20, textAlign: 'center',
