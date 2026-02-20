@@ -96,6 +96,11 @@ function App() {
   /* ─── helpers ─── */
   const getCurrentDate = () => new Date().toISOString().split('T')[0];
 
+  const formatTime = (t) => {
+    if (!t) return '';
+    return String(t).replace(/\s*น\.?\s*/g, '').trim();
+  };
+
   const convertDateToThai = (ds) => {
     if (!ds) return 'ไม่ระบุวันที่';
     let s = String(ds);
@@ -404,7 +409,7 @@ function App() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, paddingBottom: 15, borderBottom: `2px solid ${LIGHT_BLUE}`, flexWrap: 'wrap', gap: 10 }}>
           <span style={{ color: DARK_BLUE, fontWeight: 700, fontSize: 18 }}>
             วันที่ {convertDateToThai(record.reportDate)}
-            {record.dutyTime && ` เวลา ${record.dutyTime} น.`}
+            {record.dutyTime && ` เวลา ${formatTime(record.dutyTime)} น.`}
           </span>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             {record.acknowledged && (
@@ -656,7 +661,7 @@ function App() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
               <tr style={{ background: '#E3F2FD' }}>
-                {['#', 'วันที่', 'เวลา', 'ผู้ปฏิบัติหน้าที่', 'ตำแหน่ง', 'สถานที่', 'กิจกรรม', 'เหตุการณ์/รายละเอียด', 'หมายเหตุ', 'สถานะ'].map((h, i) => (
+                {['#', 'วันที่', 'เวลา', 'ผู้ปฏิบัติหน้าที่', 'ตำแหน่ง', 'สถานที่', 'กิจกรรม', 'เหตุการณ์/รายละเอียด', 'หมายเหตุ', 'รูปภาพ', 'สถานะ'].map((h, i) => (
                   <th key={i} style={{ border: '1px solid #ccc', padding: '6px 4px', fontWeight: 700, color: '#1976D2', textAlign: 'center', whiteSpace: i < 3 ? 'nowrap' : 'normal' }}>{h}</th>
                 ))}
               </tr>
@@ -666,13 +671,25 @@ function App() {
                 <tr key={r.id} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fbff' }}>
                   <td style={tdStyle}>{idx + 1}</td>
                   <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{convertDateToThai(r.reportDate)}</td>
-                  <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{r.dutyTime ? `${r.dutyTime} น.` : '-'}</td>
+                  <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{r.dutyTime ? `${formatTime(r.dutyTime)} น.` : '-'}</td>
                   <td style={tdStyle}>{r.staffName || '-'}</td>
                   <td style={tdStyle}>{r.position || '-'}</td>
                   <td style={tdStyle}>{r.location || '-'}</td>
                   <td style={{ ...tdStyle, maxWidth: 180 }}>{r.activity || '-'}</td>
                   <td style={{ ...tdStyle, maxWidth: 180 }}>{r.eventDetail || '-'}</td>
                   <td style={tdStyle}>{r.note || '-'}</td>
+                  <td style={{ ...tdStyle, padding: 4 }}>
+                    {(() => {
+                      const imgs = parseImageUrls(r.imageUrl);
+                      return imgs.length > 0 ? (
+                        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                          {imgs.map((url, i) => (
+                            <img key={i} src={url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 3 }} />
+                          ))}
+                        </div>
+                      ) : '-';
+                    })()}
+                  </td>
                   <td style={{ ...tdStyle, textAlign: 'center', color: r.acknowledged ? '#388E3C' : '#FF9800', fontWeight: 600 }}>
                     {r.acknowledged ? 'รับทราบ' : 'รอ'}
                   </td>
