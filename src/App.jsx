@@ -310,7 +310,7 @@ function App() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
         <div>
-          <label style={labelStyle}>รายชื่อผู้ปฏิบัติหน้าที่ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+          <label style={labelStyle}>รายชื่อผู้รายงาน <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
           <input type="text" placeholder="ชื่อและนามสกุล" value={data.staffName} className="input-field"
             onChange={e => setData(p => ({ ...p, staffName: e.target.value }))} />
         </div>
@@ -431,7 +431,7 @@ function App() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 15, marginBottom: 15 }}>
-          {renderFieldItem("ผู้ปฏิบัติหน้าที่", record.staffName)}
+          {renderFieldItem("ผู้รายงาน", record.staffName)}
           {renderFieldItem("ตำแหน่ง", record.position)}
           {renderFieldItem("สถานที่", record.location)}
           {renderFieldItem("กิจกรรมที่ปฏิบัติ", record.activity)}
@@ -591,7 +591,7 @@ function App() {
           <div style={{ background: '#fff3e0', padding: 15, borderRadius: 8, borderLeft: '4px solid #FF9800', marginBottom: 20, fontSize: 15 }}>
             <div><strong>วันที่:</strong> {convertDateToThai(selectedRecord.reportDate)}</div>
             <div><strong>เวลา:</strong> {selectedRecord.dutyTime || '-'}</div>
-            <div><strong>ผู้ปฏิบัติหน้าที่:</strong> {selectedRecord.staffName}</div>
+            <div><strong>ผู้รายงาน:</strong> {selectedRecord.staffName}</div>
             <div><strong>ตำแหน่ง:</strong> {selectedRecord.position}</div>
           </div>
         )}
@@ -661,7 +661,7 @@ function App() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
               <tr style={{ background: '#E3F2FD' }}>
-                {['#', 'วันที่', 'เวลา', 'ผู้ปฏิบัติหน้าที่', 'ตำแหน่ง', 'สถานที่', 'กิจกรรม', 'เหตุการณ์/รายละเอียด', 'หมายเหตุ', 'รูปภาพ', 'สถานะ'].map((h, i) => (
+                {['#', 'วันที่', 'เวลา', 'ผู้รายงาน', 'ตำแหน่ง', 'สถานที่', 'กิจกรรม', 'เหตุการณ์/รายละเอียด', 'หมายเหตุ', 'รูปภาพ', 'สถานะ'].map((h, i) => (
                   <th key={i} style={{ border: '1px solid #ccc', padding: '6px 4px', fontWeight: 700, color: '#1976D2', textAlign: 'center', whiteSpace: i < 3 ? 'nowrap' : 'normal' }}>{h}</th>
                 ))}
               </tr>
@@ -728,7 +728,7 @@ function App() {
         {selectedRecord && (
           <div style={{ background: '#fff3e0', padding: 15, borderRadius: 8, borderLeft: '4px solid #FF9800', marginBottom: 20, fontSize: 15 }}>
             <div><strong>วันที่:</strong> {convertDateToThai(selectedRecord.reportDate)}</div>
-            <div><strong>ผู้ปฏิบัติหน้าที่:</strong> {selectedRecord.staffName}</div>
+            <div><strong>ผู้รายงาน:</strong> {selectedRecord.staffName}</div>
             <div><strong>กิจกรรม:</strong> {selectedRecord.activity}</div>
           </div>
         )}
