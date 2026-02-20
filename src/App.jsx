@@ -414,8 +414,8 @@ function App() {
             )}
             {showActions && (
               <>
-                <button onClick={() => handleEdit(record)} style={btnStyle('#4CAF50')}>แก้ไข</button>
-                <button onClick={() => handleDelete(record)} style={btnStyle('#f44336')}>ลบ</button>
+                <button onClick={e => { e.stopPropagation(); handleEdit(record); }} style={btnStyle('#4CAF50')}>แก้ไข</button>
+                <button onClick={e => { e.stopPropagation(); handleDelete(record); }} style={btnStyle('#f44336')}>ลบ</button>
               </>
             )}
             {!showActions && !record.acknowledged && (
@@ -466,9 +466,11 @@ function App() {
   });
 
   /* ─── POPUP WRAPPER ─── */
-  const Popup = ({ show, children }) => !show ? null : (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: 'white', padding: 30, borderRadius: 15, maxWidth: 500, width: '100%', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', maxHeight: '90vh', overflowY: 'auto' }}>
+  const Popup = ({ show, wide, children }) => !show ? null : (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={e => { if (e.target === e.currentTarget) e.stopPropagation(); }}>
+      <div style={{ background: 'white', padding: 30, borderRadius: 15, maxWidth: wide ? 700 : 500, width: '100%', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', maxHeight: '90vh', overflowY: 'auto' }}
+        onClick={e => e.stopPropagation()}>
         {children}
       </div>
     </div>
@@ -559,7 +561,7 @@ function App() {
                 style={{ padding: '12px 25px', background: BLUE, color: 'white', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 600, cursor: 'pointer', fontFamily: 'Sarabun, sans-serif' }}>
                 ค้นหา
               </button>
-              <button onClick={handlePrint} style={printBtnStyle}>
+              <button onClick={openPrintPopup} style={printBtnStyle}>
                 🖨️ พิมพ์รายงาน / บันทึก PDF
               </button>
             </div>
@@ -597,7 +599,7 @@ function App() {
       </Popup>
 
       {/* ══ EDIT ══ */}
-      <Popup show={showEditPopup}>
+      <Popup show={showEditPopup} wide>
         <div style={{ maxWidth: '100%' }}>
           <h3 style={popH3}>แก้ไขรายงาน</h3>
           <FormFields data={editFormData} setData={setEditFormData} />
