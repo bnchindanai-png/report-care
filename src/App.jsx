@@ -181,8 +181,8 @@ function App() {
 
   /* ─── CREATE ─── */
   const handleSubmit = async () => {
-    if (!formData.staffName || !formData.reportDate || !formData.activity) {
-      showNotif('กรุณากรอกชื่อ, วันที่ และกิจกรรม', 'error'); return;
+    if (!formData.staffName || !formData.reportDate || !formData.activity || !formData.dutyTime || !formData.position || !formData.location || formData.images.length === 0) {
+      showNotif('กรุณากรอกข้อมูลที่จำเป็นให้ครบ (วันที่, เวลา, ชื่อ, ตำแหน่ง, สถานที่, กิจกรรม, รูปถ่าย)', 'error'); return;
     }
     setSubmitting(true);
     try {
@@ -302,7 +302,7 @@ function App() {
             onChange={e => setData(p => ({ ...p, reportDate: e.target.value }))} />
         </div>
         <div>
-          <label style={labelStyle}>เวลาปฏิบัติหน้าที่</label>
+          <label style={labelStyle}>เวลาปฏิบัติหน้าที่ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
           <input type="time" value={data.dutyTime} className="input-field"
             onChange={e => setData(p => ({ ...p, dutyTime: e.target.value }))} />
         </div>
@@ -315,14 +315,14 @@ function App() {
             onChange={e => setData(p => ({ ...p, staffName: e.target.value }))} />
         </div>
         <div>
-          <label style={labelStyle}>ตำแหน่ง</label>
+          <label style={labelStyle}>ตำแหน่ง <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
           <input type="text" placeholder="ตำแหน่ง" value={data.position} className="input-field"
             onChange={e => setData(p => ({ ...p, position: e.target.value }))} />
         </div>
       </div>
 
       <div>
-        <label style={labelStyle}>สถานที่</label>
+        <label style={labelStyle}>สถานที่ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
         <input type="text" placeholder="กรุณาระบุสถานที่" value={data.location} className="input-field"
           onChange={e => setData(p => ({ ...p, location: e.target.value }))} />
       </div>
@@ -351,9 +351,9 @@ function App() {
       {/* Multi-image */}
       <div>
         <label style={labelStyle}>
-          รูปภาพ
+          รูปภาพ <span style={{ color: '#f44336', fontSize: 14 }}>*</span>
           <span style={{ fontWeight: 400, color: '#888', fontSize: 14, marginLeft: 8 }}>
-            ({data.images.length}/{MAX_IMAGES} รูป)
+            ({data.images.length}/{MAX_IMAGES} รูป, ต้องมีอย่างน้อย 1 รูป)
           </span>
         </label>
 
