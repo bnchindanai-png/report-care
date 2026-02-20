@@ -80,6 +80,12 @@ function App() {
   const [editFormData, setEditFormData] = useState(emptyForm);
   const [filterDate,   setFilterDate]   = useState('');
 
+  /* Print state */
+  const [showPrintPopup, setShowPrintPopup] = useState(false);
+  const [printFrom, setPrintFrom] = useState('');
+  const [printTo,   setPrintTo]   = useState('');
+  const [printData, setPrintData] = useState(null); // null = not printing
+
   useEffect(() => {
     loadAllData();
     const today = getCurrentDate();
@@ -260,7 +266,26 @@ function App() {
   };
 
   /* ─── PRINT ─── */
-  const handlePrint = () => window.print();
+  const openPrintPopup = () => {
+    const today = getCurrentDate();
+    setPrintFrom(today);
+    setPrintTo(today);
+    setShowPrintPopup(true);
+  };
+
+  const executePrint = () => {
+    const from = printFrom || '0000-01-01';
+    const to   = printTo   || '9999-12-31';
+    const filtered = dataRecords
+      .filter(r => {
+        const d = String(r.reportDate || '').split('T')[0];
+        return d >= from && d <= to;
+      })
+      .sort((a, b) => (a.reportDate || '').localeCompare(b.reportDate || ''));
+    setPrintData({ records: filtered, from, to });
+    setShowPrintPopup(false);
+    setTimeout(() => { window.print(); setPrintData(null); }, 300);
+  };
 
   /* ─── FORM FIELDS ─── */
   const FormFields = ({ data, setData }) => (
@@ -516,8 +541,8 @@ function App() {
         {activeTab === 'all' && (
           <>
             <div style={{ marginBottom: 20 }}>
-              <button onClick={handlePrint} className="hide-print" style={printBtnStyle}>
-                🖨️ พิมพ์รายงาน / บันทึก PDF
+              <button onClick={openPrintPopup} className="hide-print" style={printBtnStyle}>
+                พิมพ์รายงาน / บันทึก PDF
               </button>
             </div>
             <div style={countStyle}>{`จำนวนรายงานทั้งหมด ${dataRecords.length} รายการ`}</div>
@@ -589,6 +614,94 @@ function App() {
         </div>
       </Popup>
 
+      {/* ══ PRINT DATE RANGE ══ */}
+      <Popup show={showPrintPopup}>
+        <h3 style={popH3}>เลือกช่วงวันที่พิมพ์รายงาน</h3>
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div>
+            <label style={labelStyle}>ตั้งแต่วันที่</label>
+            <input type="date" className="input-field" value={printFrom}
+              onChange={e => setPrintFrom(e.target.value)} />
+          </div>
+          <div>
+            <label style={labelStyle}>ถึงวันที่</label>
+            <input type="date" className="input-field" value={printTo}
+              onChange={e => setPrintTo(e.target.value)} />
+          </div>
+        </div>
+        {popupActions(
+          () => setShowPrintPopup(false),
+          executePrint, 'พิมพ์รายงาน'
+        )}
+      </Popup>
+
+      {/* ══ PRINT VIEW (only visible during printing) ══ */}
+      {printData && (
+        <div className="print-view">
+          <div style={{ textAlign: 'center', marginBottom: 24, borderBottom: '3px double #1976D2', paddingBottom: 16 }}>
+            <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: '#1976D2' }}>
+              ศูนย์การศึกษาพิเศษ เขตการศึกษา 6 จังหวัดลพบุรี
+            </h1>
+            <h2 style={{ fontSize: 17, fontWeight: 600, margin: '6px 0', color: '#333' }}>
+              รายงานการปฏิบัติหน้าที่ดูแลนักเรียน
+            </h2>
+            <p style={{ fontSize: 14, color: '#555', margin: '4px 0 0' }}>
+              ช่วงวันที่ {convertDateToThai(printData.from)} - {convertDateToThai(printData.to)}
+              <span style={{ marginLeft: 16 }}>จำนวน {printData.records.length} รายการ</span>
+            </p>
+          </div>
+
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr style={{ background: '#E3F2FD' }}>
+                {['#', 'วันที่', 'เวลา', 'ผู้ปฏิบัติหน้าที่', 'ตำแหน่ง', 'สถานที่', 'กิจกรรม', 'เหตุการณ์/รายละเอียด', 'หมายเหตุ', 'สถานะ'].map((h, i) => (
+                  <th key={i} style={{ border: '1px solid #ccc', padding: '6px 4px', fontWeight: 700, color: '#1976D2', textAlign: 'center', whiteSpace: i < 3 ? 'nowrap' : 'normal' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {printData.records.map((r, idx) => (
+                <tr key={r.id} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fbff' }}>
+                  <td style={tdStyle}>{idx + 1}</td>
+                  <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{convertDateToThai(r.reportDate)}</td>
+                  <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{r.dutyTime ? `${r.dutyTime} น.` : '-'}</td>
+                  <td style={tdStyle}>{r.staffName || '-'}</td>
+                  <td style={tdStyle}>{r.position || '-'}</td>
+                  <td style={tdStyle}>{r.location || '-'}</td>
+                  <td style={{ ...tdStyle, maxWidth: 180 }}>{r.activity || '-'}</td>
+                  <td style={{ ...tdStyle, maxWidth: 180 }}>{r.eventDetail || '-'}</td>
+                  <td style={tdStyle}>{r.note || '-'}</td>
+                  <td style={{ ...tdStyle, textAlign: 'center', color: r.acknowledged ? '#388E3C' : '#FF9800', fontWeight: 600 }}>
+                    {r.acknowledged ? 'รับทราบ' : 'รอ'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={{ marginTop: 40, display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+            <div style={{ textAlign: 'center', width: '45%' }}>
+              <div style={{ borderTop: '1px solid #333', paddingTop: 8, marginTop: 50 }}>
+                ลงชื่อ ............................................
+              </div>
+              <div style={{ marginTop: 4 }}>( .......................................... )</div>
+              <div style={{ color: '#555', marginTop: 4 }}>ผู้รายงาน</div>
+            </div>
+            <div style={{ textAlign: 'center', width: '45%' }}>
+              <div style={{ borderTop: '1px solid #333', paddingTop: 8, marginTop: 50 }}>
+                ลงชื่อ ............................................
+              </div>
+              <div style={{ marginTop: 4 }}>( .......................................... )</div>
+              <div style={{ color: '#555', marginTop: 4 }}>ผู้อำนวยการ</div>
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: '#999' }}>
+            พิมพ์เมื่อ {new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          </div>
+        </div>
+      )}
+
       {/* ══ DELETE ══ */}
       <Popup show={showDeletePopup}>
         <h3 style={popH3}>ยืนยันการลบรายงาน</h3>
@@ -634,6 +747,7 @@ const popBtnStyle = (bg, color) => ({
   borderRadius: 8, fontSize: 16, fontWeight: 600, cursor: 'pointer',
   fontFamily: 'Sarabun, sans-serif', transition: 'all 0.3s ease',
 });
+const tdStyle = { border: '1px solid #ddd', padding: '5px 6px', verticalAlign: 'top', fontSize: 11, lineHeight: 1.4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' };
 const printBtnStyle = {
   width: '100%', padding: '14px 20px',
   background: 'linear-gradient(135deg, #43A047 0%, #2E7D32 100%)',
