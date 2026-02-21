@@ -109,31 +109,58 @@ body {
 }
 
 @media print {
-  .hide-print { display: none !important; }
+  /* Reset everything */
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: auto !important;
+  }
 
-  /* Hide everything except print-view */
-  body { background: white !important; margin: 0 !important; padding: 0 !important; }
-  body * { visibility: hidden !important; }
-  .print-view, .print-view * { visibility: visible !important; }
+  /* Reset root containers */
+  #root, #root > div {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  /* Hide all siblings of print-view */
+  #root > div > *:not(.print-view) {
+    display: none !important;
+  }
+
   .print-view {
     display: block !important;
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    width: 100%;
-    z-index: 99999;
-    background: white;
-    padding: 10mm;
+    position: static !important;
+    width: 100% !important;
+    background: white !important;
+    padding: 4mm;
     font-family: 'Sarabun', 'TH SarabunPSK', sans-serif;
-    overflow: visible;
     box-sizing: border-box;
+    font-size: 10pt;
   }
-  .print-view table { page-break-inside: auto; width: 100% !important; }
+  .print-view table {
+    page-break-inside: auto;
+    width: 100% !important;
+    table-layout: fixed;
+    word-wrap: break-word;
+  }
   .print-view tr { page-break-inside: avoid; }
-  .print-view th { background: #E3F2FD !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-view tr:nth-child(even) { background: #f8fbff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-view img { display: inline-block !important; visibility: visible !important; }
+  .print-view th {
+    background: #E3F2FD !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-view tr:nth-child(even) {
+    background: #f8fbff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-view img {
+    display: inline-block !important;
+  }
 
-  @page { size: A4 landscape; margin: 10mm; }
+  @page { size: A4 landscape; margin: 8mm; }
 }
 
 @media (max-width: 768px) {

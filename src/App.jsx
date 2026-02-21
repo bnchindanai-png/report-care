@@ -651,77 +651,80 @@ function App() {
       {/* ══ PRINT VIEW (only visible during printing) ══ */}
       {printData && (
         <div className="print-view">
-          <div style={{ textAlign: 'center', marginBottom: 24, borderBottom: '3px double #1976D2', paddingBottom: 16 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: '#1976D2' }}>
+          <div style={{ textAlign: 'center', marginBottom: 12, borderBottom: '2px double #1976D2', paddingBottom: 8 }}>
+            <h1 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#1976D2' }}>
               ศูนย์การศึกษาพิเศษ เขตการศึกษา 6 จังหวัดลพบุรี
             </h1>
-            <h2 style={{ fontSize: 17, fontWeight: 600, margin: '6px 0', color: '#333' }}>
+            <h2 style={{ fontSize: 14, fontWeight: 600, margin: '4px 0', color: '#333' }}>
               รายงานการปฏิบัติหน้าที่ดูแลนักเรียน
             </h2>
-            <p style={{ fontSize: 14, color: '#555', margin: '4px 0 0' }}>
+            <p style={{ fontSize: 11, color: '#555', margin: '2px 0 0' }}>
               ช่วงวันที่ {convertDateToThai(printData.from)} - {convertDateToThai(printData.to)}
-              <span style={{ marginLeft: 16 }}>จำนวน {printData.records.length} รายการ</span>
+              <span style={{ marginLeft: 12 }}>จำนวน {printData.records.length} รายการ</span>
             </p>
           </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, tableLayout: 'auto' }}>
             <thead>
               <tr style={{ background: '#E3F2FD' }}>
-                {['#', 'วันที่', 'เวลา', 'ผู้รายงาน', 'ตำแหน่ง', 'สถานที่', 'กิจกรรม', 'เหตุการณ์/รายละเอียด', 'หมายเหตุ', 'รูปภาพ', 'สถานะ'].map((h, i) => (
-                  <th key={i} style={{ border: '1px solid #ccc', padding: '6px 4px', fontWeight: 700, color: '#1976D2', textAlign: 'center', whiteSpace: i < 3 ? 'nowrap' : 'normal' }}>{h}</th>
+                {['#', 'วันที่', 'เวลา', 'ผู้รายงาน', 'ตำแหน่ง', 'กิจกรรม', 'เหตุการณ์', 'หมายเหตุ', 'รูป', 'สถานะ'].map((h, i) => (
+                  <th key={i} style={{ border: '1px solid #bbb', padding: '4px 3px', fontWeight: 700, color: '#1976D2', textAlign: 'center', fontSize: 9, whiteSpace: i < 3 ? 'nowrap' : 'normal' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {printData.records.map((r, idx) => (
-                <tr key={r.id} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fbff' }}>
-                  <td style={tdStyle}>{idx + 1}</td>
-                  <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{convertDateToThai(r.reportDate)}</td>
-                  <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{r.dutyTime ? `${formatTime(r.dutyTime)} น.` : '-'}</td>
-                  <td style={tdStyle}>{r.staffName || '-'}</td>
-                  <td style={tdStyle}>{r.position || '-'}</td>
-                  <td style={tdStyle}>{r.location || '-'}</td>
-                  <td style={{ ...tdStyle, maxWidth: 180 }}>{r.activity || '-'}</td>
-                  <td style={{ ...tdStyle, maxWidth: 180 }}>{r.eventDetail || '-'}</td>
-                  <td style={tdStyle}>{r.note || '-'}</td>
-                  <td style={{ ...tdStyle, padding: 4 }}>
-                    {(() => {
-                      const imgs = parseImageUrls(r.imageUrl);
-                      return imgs.length > 0 ? (
-                        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                          {imgs.map((url, i) => (
-                            <img key={i} src={url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 3 }} />
-                          ))}
-                        </div>
-                      ) : '-';
-                    })()}
-                  </td>
-                  <td style={{ ...tdStyle, textAlign: 'center', color: r.acknowledged ? '#388E3C' : '#FF9800', fontWeight: 600 }}>
-                    {r.acknowledged ? 'รับทราบ' : 'รอ'}
-                  </td>
-                </tr>
-              ))}
+              {printData.records.map((r, idx) => {
+                const pTd = { border: '1px solid #ccc', padding: '3px 3px', textAlign: 'center', fontSize: 9, verticalAlign: 'top' };
+                return (
+                  <tr key={r.id} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fbff' }}>
+                    <td style={pTd}>{idx + 1}</td>
+                    <td style={{ ...pTd, whiteSpace: 'nowrap' }}>{convertDateToThai(r.reportDate)}</td>
+                    <td style={{ ...pTd, whiteSpace: 'nowrap' }}>{r.dutyTime ? `${formatTime(r.dutyTime)} น.` : '-'}</td>
+                    <td style={{ ...pTd, textAlign: 'left' }}>{r.staffName || '-'}</td>
+                    <td style={{ ...pTd, textAlign: 'left', fontSize: 8 }}>{r.position || '-'}</td>
+                    <td style={{ ...pTd, textAlign: 'left', maxWidth: 150, wordBreak: 'break-word' }}>{r.activity || '-'}</td>
+                    <td style={{ ...pTd, textAlign: 'left', maxWidth: 150, wordBreak: 'break-word' }}>{r.eventDetail || '-'}</td>
+                    <td style={{ ...pTd, textAlign: 'left', fontSize: 8 }}>{r.note || '-'}</td>
+                    <td style={{ ...pTd, padding: 2 }}>
+                      {(() => {
+                        const imgs = parseImageUrls(r.imageUrl);
+                        return imgs.length > 0 ? (
+                          <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+                            {imgs.slice(0, 2).map((url, i) => (
+                              <img key={i} src={url} alt="" style={{ width: 30, height: 30, objectFit: 'cover', borderRadius: 2 }} />
+                            ))}
+                            {imgs.length > 2 && <span style={{ fontSize: 7 }}>+{imgs.length - 2}</span>}
+                          </div>
+                        ) : '-';
+                      })()}
+                    </td>
+                    <td style={{ ...pTd, color: r.acknowledged ? '#388E3C' : '#FF9800', fontWeight: 600, fontSize: 8 }}>
+                      {r.acknowledged ? '✓' : 'รอ'}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 
-          <div style={{ marginTop: 40, display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+          <div style={{ marginTop: 30, display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
             <div style={{ textAlign: 'center', width: '45%' }}>
-              <div style={{ borderTop: '1px solid #333', paddingTop: 8, marginTop: 50 }}>
+              <div style={{ borderTop: '1px solid #333', paddingTop: 6, marginTop: 40 }}>
                 ลงชื่อ ............................................
               </div>
-              <div style={{ marginTop: 4 }}>( .......................................... )</div>
-              <div style={{ color: '#555', marginTop: 4 }}>ผู้รายงาน</div>
+              <div style={{ marginTop: 3 }}>( .......................................... )</div>
+              <div style={{ color: '#555', marginTop: 3 }}>ผู้รายงาน</div>
             </div>
             <div style={{ textAlign: 'center', width: '45%' }}>
-              <div style={{ borderTop: '1px solid #333', paddingTop: 8, marginTop: 50 }}>
+              <div style={{ borderTop: '1px solid #333', paddingTop: 6, marginTop: 40 }}>
                 ลงชื่อ ............................................
               </div>
-              <div style={{ marginTop: 4 }}>( .......................................... )</div>
-              <div style={{ color: '#555', marginTop: 4 }}>ผู้อำนวยการ</div>
+              <div style={{ marginTop: 3 }}>( .......................................... )</div>
+              <div style={{ color: '#555', marginTop: 3 }}>ผู้อำนวยการ</div>
             </div>
           </div>
 
-          <div style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: '#999' }}>
+          <div style={{ textAlign: 'center', marginTop: 12, fontSize: 9, color: '#999' }}>
             พิมพ์เมื่อ {new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
           </div>
         </div>
