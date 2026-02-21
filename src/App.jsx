@@ -289,7 +289,13 @@ function App() {
       .sort((a, b) => (a.reportDate || '').localeCompare(b.reportDate || ''));
     setPrintData({ records: filtered, from, to });
     setShowPrintPopup(false);
-    setTimeout(() => { window.print(); setPrintData(null); }, 300);
+    setTimeout(() => {
+      const cleanup = () => setPrintData(null);
+      window.addEventListener('afterprint', cleanup, { once: true });
+      window.print();
+      // Fallback: clear after 5s if afterprint never fires (some mobile browsers)
+      setTimeout(cleanup, 5000);
+    }, 500);
   };
 
   /* ─── FORM FIELDS ─── */
