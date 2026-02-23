@@ -316,19 +316,18 @@ function App() {
     img.src = url;
   });
 
-  const uploadImage = async (rawFile, signal) => {
+  const uploadImage = async (rawFile, signal, sessionId) => {
     const file = await compressImage(rawFile);
     const ext  = file.name.split('.').pop();
     const name = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+    const headers = {
+      'Authorization': `Bearer ${authToken}`,
+      'Content-Type': file.type || 'image/jpeg',
+      'x-file-name': name,
+    };
+    if (sessionId) headers['x-session-id'] = sessionId;
     const res = await fetch(UPLOAD_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': file.type || 'image/jpeg',
-        'x-file-name': name,
-      },
-      body: file,
-      signal,
+      method: 'POST', headers, body: file, signal,
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Upload failed');
@@ -357,12 +356,38 @@ function App() {
     } catch { /* best-effort cleanup */ }
   };
 
+  const startSession = async () => {
+    try {
+      const res = await fetch(UPLOAD_URL, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start-session' }),
+      });
+      const data = await res.json();
+      return data.session_id || null;
+    } catch { return null; }
+  };
+
+  const commitSession = async (sessionId) => {
+    if (!sessionId) return;
+    try {
+      await fetch(UPLOAD_URL, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'commit-session', session_id: sessionId }),
+      });
+    } catch { /* best-effort */ }
+  };
+
   const uploadAllImages = async (images) => {
     const total = images.filter(img => img.file).length;
     let current = 0;
     setUploadProgress({ current: 0, total, step: 'upload' });
-    const uploadedUrls = []; // track for cleanup on failure
+    const uploadedUrls = [];
     localStorage.setItem('pending_uploads', JSON.stringify([]));
+
+    // Start server-side session (server will auto-cleanup if not committed)
+    const sessionId = await startSession();
 
     // Create AbortController so offline/beforeunload can cancel uploads
     const abortCtrl = new AbortController();
@@ -373,17 +398,16 @@ function App() {
         if (img.file) {
           current++;
           setUploadProgress({ current, total, step: 'upload' });
-          const url = await uploadImage(img.file, abortCtrl.signal);
+          const url = await uploadImage(img.file, abortCtrl.signal, sessionId);
           uploadedUrls.push(url);
-          // Persist to localStorage so cleanup works even if app is killed
           localStorage.setItem('pending_uploads', JSON.stringify(uploadedUrls));
         } else if (img.existingUrl) {
           uploadedUrls.push(img.existingUrl);
         }
       }
-      return uploadedUrls;
+      return { urls: uploadedUrls, sessionId };
     } catch (err) {
-      // Upload interrupted — delete all successfully uploaded images
+      // Client-side fast cleanup (server will also cleanup after 30 min)
       await deleteUploadedImages(uploadedUrls);
       localStorage.removeItem('pending_uploads');
       const isAbort = err.name === 'AbortError';
@@ -416,8 +440,11 @@ function App() {
     }
     setSubmitting(true);
     let uploadedImages = [];
+    let sessionId = null;
     try {
-      uploadedImages = await uploadAllImages(formData.images);
+      const result = await uploadAllImages(formData.images);
+      uploadedImages = result.urls;
+      sessionId = result.sessionId;
       setUploadProgress(p => ({ ...p, step: 'saving' }));
       await apiCall('/create-feed-post', {
         title: formData.activity,
@@ -428,7 +455,8 @@ function App() {
         location: formData.location ? { name: formData.location } : null,
       }, authToken);
 
-      // Post created successfully — uploads are safe now
+      // Post created successfully — commit session & clear pending
+      commitSession(sessionId);
       localStorage.removeItem('pending_uploads');
 
       // Save custom category & tags for future use
