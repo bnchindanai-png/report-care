@@ -108,6 +108,40 @@ const buildCategory = (form, reportType) => {
   return type.fullName;
 };
 
+const buildFormData = (form, reportType) => {
+  const type = REPORT_TYPES[reportType];
+  if (!type) return {};
+  const base = {
+    reportType,
+    formType: type.formType,
+    reportDate: form.reportDate,
+    dutyTime: form.dutyTime,
+    staffName: form.staffName,
+    position: form.position,
+    location: form.location,
+    tags: form.tags,
+  };
+  switch (type.formType) {
+    case 'duty':
+      return { ...base, activity: form.activity, eventDetail: form.eventDetail, note: form.note };
+    case 'service':
+      return { ...base, serviceDetail: form.serviceDetail, note: form.note };
+    case 'student_dev':
+      return {
+        ...base,
+        learningMode: form.learningMode,
+        studentName: form.studentName,
+        disabilityType: form.disabilityType,
+        learningActivities: form.learningActivities,
+        obstacles: form.obstacles,
+      };
+    case 'other':
+      return { ...base, customCategoryName: form.customCategoryName, serviceDetail: form.serviceDetail, note: form.note };
+    default:
+      return base;
+  }
+};
+
 /* ════════════════════════════════════════════ */
 
 function App() {
@@ -603,6 +637,8 @@ function App() {
         tags: buildTags(formData, reportType),
         images: uploadedImages,
         location: formData.location ? { name: formData.location } : null,
+        report_type: reportType,
+        form_data: buildFormData(formData, reportType),
       }, authToken);
 
       // Post created successfully — commit session & clear pending
