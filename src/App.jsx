@@ -11,30 +11,101 @@ const BLUE       = '#2196F3';
 const DARK_BLUE  = '#1976D2';
 const LIGHT_BLUE = '#E3F2FD';
 
-const DEFAULT_CATEGORIES = [
-  'รายงานหน้าที่',
-  'ข่าวสาร',
-  'กิจกรรม',
-  'ประชุม',
-  'อบรม/สัมมนา',
-  'เยี่ยมบ้าน',
-  'อื่นๆ',
-];
+/* ─── Report Types Config ─── */
+const REPORT_TYPES = {
+  duty: {
+    key: 'duty', label: 'ปฏิบัติหน้าที่',
+    fullName: 'รายงานการปฏิบัติหน้าที่ดูแลนักเรียนประจำวัน (ศูนย์ฯ)',
+    icon: '📋', formType: 'duty',
+    colors: { primary: '#2196F3', dark: '#1976D2', light: '#E3F2FD' },
+  },
+  lunch: {
+    key: 'lunch', label: 'อาหารกลางวัน',
+    fullName: 'รายงานอาหารกลางวัน (หน่วยบริการ)',
+    icon: '🍱', formType: 'service',
+    colors: { primary: '#4CAF50', dark: '#388E3C', light: '#E8F5E9' },
+  },
+  early_service: {
+    key: 'early_service', label: 'ระยะแรกเริ่ม (หน่วยบริการ)',
+    fullName: 'รายงานการจัดให้บริการช่วยเหลือระยะแรกเริ่มฯ (หน่วยบริการ)',
+    icon: '🤝', formType: 'service',
+    colors: { primary: '#FF9800', dark: '#F57C00', light: '#FFF3E0' },
+  },
+  early_center: {
+    key: 'early_center', label: 'ระยะแรกเริ่ม (ศูนย์ฯ)',
+    fullName: 'รายงานการจัดให้บริการช่วยเหลือระยะแรกเริ่มฯ (ศูนย์ฯ)',
+    icon: '🏫', formType: 'service',
+    colors: { primary: '#9C27B0', dark: '#7B1FA2', light: '#F3E5F5' },
+  },
+  student_dev: {
+    key: 'student_dev', label: 'พัฒนาผู้เรียน',
+    fullName: 'รายงานผลการพัฒนาผู้เรียนรูปแบบ online / onsite',
+    icon: '📚', formType: 'student_dev',
+    colors: { primary: '#00BCD4', dark: '#0097A7', light: '#E0F7FA' },
+  },
+  other: {
+    key: 'other', label: 'อื่นๆ',
+    fullName: '',
+    icon: '📝', formType: 'other',
+    colors: { primary: '#607D8B', dark: '#455A64', light: '#ECEFF1' },
+  },
+};
 
 /* ─── field mapping helpers ─── */
-const buildTags = (form) => {
+const buildTags = (form, reportType) => {
   const tags = [];
   if (form.reportDate) tags.push(`report_date:${form.reportDate}`);
   if (form.dutyTime)   tags.push(`duty_time:${form.dutyTime}`);
+  if (reportType)      tags.push(`report_type:${reportType}`);
   if (Array.isArray(form.tags)) form.tags.forEach(t => tags.push(t));
   return tags;
 };
 
-const buildDescription = (form) => {
+const buildTitle = (form, reportType) => {
+  const type = REPORT_TYPES[reportType];
+  if (!type) return form.activity || '-';
+  switch (type.formType) {
+    case 'duty':        return form.activity || type.fullName;
+    case 'service':     return type.fullName;
+    case 'student_dev': return `${type.fullName} - ${form.studentName || ''}`.trim();
+    case 'other':       return form.customCategoryName || 'อื่นๆ';
+    default:            return form.activity || '-';
+  }
+};
+
+const buildDescription = (form, reportType) => {
+  const type = REPORT_TYPES[reportType];
+  if (!type) return form.activity || '-';
   const parts = [];
-  if (form.eventDetail) parts.push(form.eventDetail);
-  if (form.note)        parts.push(`หมายเหตุ: ${form.note}`);
-  return parts.length > 0 ? parts.join('\n') : (form.activity || '-');
+  switch (type.formType) {
+    case 'duty':
+      if (form.eventDetail) parts.push(form.eventDetail);
+      if (form.note) parts.push(`หมายเหตุ: ${form.note}`);
+      return parts.length > 0 ? parts.join('\n') : (form.activity || '-');
+    case 'service':
+    case 'other':
+      if (form.serviceDetail) parts.push(form.serviceDetail);
+      if (form.note) parts.push(`หมายเหตุ: ${form.note}`);
+      return parts.length > 0 ? parts.join('\n') : '-';
+    case 'student_dev':
+      parts.push(`รูปแบบ: ${form.learningMode || '-'}`);
+      parts.push(`ชื่อผู้เรียน: ${form.studentName || '-'}`);
+      parts.push(`ประเภทความพิการ: ${form.disabilityType || '-'}`);
+      if (form.learningActivities.length > 0)
+        parts.push(`กิจกรรมการเรียนรู้:\n${form.learningActivities.map((a, i) => `  ${i + 1}. ${a}`).join('\n')}`);
+      if (form.obstacles.length > 0)
+        parts.push(`ปัญหา/อุปสรรค:\n${form.obstacles.map((o, i) => `  ${i + 1}. ${o}`).join('\n')}`);
+      return parts.join('\n');
+    default:
+      return '-';
+  }
+};
+
+const buildCategory = (form, reportType) => {
+  const type = REPORT_TYPES[reportType];
+  if (!type) return 'อื่นๆ';
+  if (type.formType === 'other') return form.customCategoryName || 'อื่นๆ';
+  return type.fullName;
 };
 
 /* ════════════════════════════════════════════ */
@@ -49,12 +120,21 @@ function App() {
   const [otpLoading,  setOtpLoading]  = useState(false);
   const [userName,    setUserName]    = useState('');
 
+  /* ── Report step & type ── */
+  const [reportStep, setReportStep] = useState('select'); // 'select' | 'form'
+  const [reportType, setReportType] = useState(null);     // key from REPORT_TYPES
+
   /* ── Form state ── */
   const emptyForm = {
     reportDate: '', dutyTime: '', staffName: '', position: '',
     location: '', activity: '', eventDetail: '', note: '',
-    category: 'รายงานหน้าที่', tags: [], tagInput: '', categoryInput: '',
+    tags: [], tagInput: '',
     images: [],
+    serviceDetail: '',
+    learningMode: '', studentName: '', disabilityType: '',
+    learningActivities: [], learningActivityInput: '',
+    obstacles: [], obstacleInput: '',
+    customCategoryName: '',
   };
   const [formData,   setFormData]   = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
@@ -67,7 +147,12 @@ function App() {
   /* ── Shared categories & tags (DB) ── */
   const [dbCategories, setDbCategories] = useState([]);
   const [dbTags, setDbTags] = useState([]);
-  const [showCatDropdown, setShowCatDropdown] = useState(false);
+
+  /* ── Derived ── */
+  const typeConfig = reportType ? REPORT_TYPES[reportType] : null;
+  const colors = typeConfig ? typeConfig.colors : { primary: BLUE, dark: DARK_BLUE, light: LIGHT_BLUE };
+  const labelStyle = { display: 'block', fontWeight: 600, color: colors.dark, marginBottom: 8, fontSize: 15 };
+  const allSavedTags = [...new Set([...dbTags])];
 
   /* ── Init: check localStorage ── */
   useEffect(() => {
@@ -176,8 +261,6 @@ function App() {
     } catch {}
   };
 
-  const allCategories = [...new Set([...DEFAULT_CATEGORIES, ...dbCategories])];
-
   const saveCategory = async (cat) => {
     if (!cat) return;
     try {
@@ -201,8 +284,6 @@ function App() {
       if (!dbTags.includes(tag)) setDbTags(prev => [...prev, tag]);
     } catch {}
   };
-
-  const allSavedTags = [...new Set([...dbTags])];
 
   /* ─── helpers ─── */
   const getCurrentDate = () => new Date().toISOString().split('T')[0];
@@ -301,6 +382,8 @@ function App() {
     setOtp('');
     setUserName('');
     setFormData(emptyForm);
+    setReportStep('select');
+    setReportType(null);
   };
 
   /* ═══════════════════════════════════════════
@@ -448,15 +531,63 @@ function App() {
   };
 
   /* ═══════════════════════════════════════════
+     REPORT TYPE SELECTION
+     ═══════════════════════════════════════════ */
+
+  const handleSelectType = (key) => {
+    setReportType(key);
+    setReportStep('form');
+    setFormData(prev => ({
+      ...emptyForm,
+      reportDate: getCurrentDate(),
+      dutyTime: getCurrentTime(),
+      staffName: prev.staffName,
+      position: prev.position,
+    }));
+  };
+
+  /* ═══════════════════════════════════════════
      CREATE POST
      ═══════════════════════════════════════════ */
 
   const handleSubmit = async () => {
-    if (!formData.reportDate || !formData.dutyTime || !formData.position ||
-        !formData.location || !formData.activity || formData.images.length === 0) {
-      showNotif('กรุณากรอกข้อมูลที่จำเป็นให้ครบ (วันที่, เวลา, ตำแหน่ง, สถานที่, กิจกรรม, รูปถ่าย)', 'error');
+    const type = REPORT_TYPES[reportType];
+    if (!type) return;
+
+    // Common validation
+    if (!formData.reportDate || !formData.dutyTime || !formData.location || formData.images.length === 0) {
+      showNotif('กรุณากรอกข้อมูลที่จำเป็นให้ครบ (วันที่, เวลา, สถานที่, รูปถ่าย)', 'error');
       return;
     }
+
+    // Type-specific validation
+    switch (type.formType) {
+      case 'duty':
+        if (!formData.activity) {
+          showNotif('กรุณากรอกกิจกรรมที่ปฏิบัติ', 'error');
+          return;
+        }
+        break;
+      case 'service':
+        if (!formData.serviceDetail) {
+          showNotif('กรุณากรอกรายละเอียดที่ปฏิบัติ', 'error');
+          return;
+        }
+        break;
+      case 'student_dev':
+        if (!formData.learningMode || !formData.studentName || !formData.disabilityType || formData.learningActivities.length === 0) {
+          showNotif('กรุณากรอกข้อมูลที่จำเป็นให้ครบ (รูปแบบ, ชื่อผู้เรียน, ประเภทความพิการ, กิจกรรมการเรียนรู้)', 'error');
+          return;
+        }
+        break;
+      case 'other':
+        if (!formData.customCategoryName || !formData.serviceDetail) {
+          showNotif('กรุณากรอกชื่อรายงานและรายละเอียด', 'error');
+          return;
+        }
+        break;
+    }
+
     setSubmitting(true);
     let uploadedImages = [];
     let sessionId = null;
@@ -466,10 +597,10 @@ function App() {
       sessionId = result.sessionId;
       setUploadProgress(p => ({ ...p, step: 'saving' }));
       await apiCall('/create-feed-post', {
-        title: formData.activity,
-        description: buildDescription(formData),
-        category: formData.category || 'รายงานหน้าที่',
-        tags: buildTags(formData),
+        title: buildTitle(formData, reportType),
+        description: buildDescription(formData, reportType),
+        category: buildCategory(formData, reportType),
+        tags: buildTags(formData, reportType),
         images: uploadedImages,
         location: formData.location ? { name: formData.location } : null,
       }, authToken);
@@ -478,8 +609,8 @@ function App() {
       commitSession(sessionId);
       localStorage.removeItem('pending_uploads');
 
-      // Save custom category & tags for future use
-      saveCategory(formData.category);
+      // Save category & tags for future use
+      saveCategory(buildCategory(formData, reportType));
       formData.tags.forEach(t => saveTag(t));
 
       showNotif('บันทึกรายงานสำเร็จ', 'success');
@@ -490,6 +621,8 @@ function App() {
         staffName: prev.staffName,
         position: prev.position,
       }));
+      setReportStep('select');
+      setReportType(null);
     } catch (e) {
       // Cleanup uploaded images if create-feed-post failed
       if (uploadedImages.length > 0) {
@@ -507,10 +640,374 @@ function App() {
   };
 
   /* ═══════════════════════════════════════════
-     STYLES
+     RENDER HELPERS
      ═══════════════════════════════════════════ */
 
-  const labelStyle = { display: 'block', fontWeight: 600, color: DARK_BLUE, marginBottom: 8, fontSize: 15 };
+  const renderTypeSelection = () => (
+    <div className="fade-in" style={{ background: 'white', padding: 25, borderRadius: 15, boxShadow: '0 2px 15px rgba(0,0,0,0.08)' }}>
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: '#333', textAlign: 'center', margin: '0 0 20px' }}>
+        เลือกประเภทรายงาน
+      </h2>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {Object.values(REPORT_TYPES).map(type => (
+          <button key={type.key} onClick={() => handleSelectType(type.key)}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+              padding: '20px 12px', background: type.colors.light,
+              border: `2px solid ${type.colors.primary}30`,
+              borderRadius: 12, cursor: 'pointer', transition: 'all 0.2s',
+              fontFamily: 'Sarabun, sans-serif',
+            }}>
+            <span style={{ fontSize: 36 }}>{type.icon}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: type.colors.dark, textAlign: 'center', lineHeight: 1.3 }}>
+              {type.label}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderDateTimeFields = () => (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div>
+        <label style={labelStyle}>วันที่ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+        <input type="date" value={formData.reportDate} className="input-field"
+          onChange={e => setFormData(p => ({ ...p, reportDate: e.target.value }))} />
+      </div>
+      <div>
+        <label style={labelStyle}>เวลา <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+        <input type="time" value={formData.dutyTime} className="input-field"
+          onChange={e => setFormData(p => ({ ...p, dutyTime: e.target.value }))} />
+      </div>
+    </div>
+  );
+
+  const renderTagsField = () => (
+    <div>
+      <label style={labelStyle}>แท็ก</label>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input type="text" value={formData.tagInput} className="input-field"
+          placeholder="พิมพ์แท็กแล้ว Enter"
+          style={{ flex: 1 }}
+          onChange={e => setFormData(p => ({ ...p, tagInput: e.target.value }))}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              const val = formData.tagInput.replace(/^#/, '').trim();
+              if (val && !formData.tags.includes(val)) {
+                setFormData(p => ({ ...p, tags: [...p.tags, val], tagInput: '' }));
+              }
+            }
+          }} />
+        <button type="button" onClick={() => {
+          const val = formData.tagInput.replace(/^#/, '').trim();
+          if (val && !formData.tags.includes(val)) {
+            setFormData(p => ({ ...p, tags: [...p.tags, val], tagInput: '' }));
+          }
+        }} style={{
+          padding: '0 14px', background: colors.primary, color: 'white', border: 'none',
+          borderRadius: 8, fontSize: 18, cursor: 'pointer', fontWeight: 700,
+        }}>+</button>
+      </div>
+
+      {/* Selected tags */}
+      {formData.tags.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+          {formData.tags.map((tag, i) => (
+            <span key={i} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              background: colors.light, color: colors.dark, padding: '4px 10px',
+              borderRadius: 20, fontSize: 13, fontWeight: 600,
+            }}>
+              #{tag}
+              <button onClick={() => setFormData(p => ({ ...p, tags: p.tags.filter((_, j) => j !== i) }))}
+                style={{ background: 'none', border: 'none', color: colors.dark, cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Saved tag suggestions */}
+      {allSavedTags.filter(t => !formData.tags.includes(t)).length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <span style={{ fontSize: 12, color: '#999' }}>แท็กที่เคยใช้:</span>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+            {allSavedTags.filter(t => !formData.tags.includes(t)).map(tag => (
+              <button key={tag} type="button"
+                onClick={() => setFormData(p => ({ ...p, tags: [...p.tags, tag] }))}
+                style={{
+                  background: 'white', border: `1.5px solid ${colors.light}`, color: colors.dark,
+                  padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 500,
+                  cursor: 'pointer', fontFamily: 'Sarabun, sans-serif',
+                }}>
+                + #{tag}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderStaffFields = () => (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div>
+        <label style={labelStyle}>ผู้รายงาน</label>
+        <input type="text" value={formData.staffName} className="input-field"
+          readOnly style={{ background: '#f5f5f5', color: '#666' }} />
+      </div>
+      <div>
+        <label style={labelStyle}>ตำแหน่ง</label>
+        <input type="text" value={formData.position} className="input-field"
+          readOnly style={{ background: '#f5f5f5', color: '#666' }} />
+      </div>
+    </div>
+  );
+
+  const renderLocationField = () => (
+    <div>
+      <label style={labelStyle}>สถานที่ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+      <input type="text" value={formData.location} className="input-field" placeholder="ระบุสถานที่ปฏิบัติหน้าที่"
+        onChange={e => setFormData(p => ({ ...p, location: e.target.value }))} />
+    </div>
+  );
+
+  const renderImagesField = () => (
+    <div>
+      <label style={labelStyle}>
+        รูปถ่าย <span style={{ color: '#f44336', fontSize: 14 }}>*</span>
+        <span style={{ fontWeight: 400, color: '#999', fontSize: 13, marginLeft: 8 }}>
+          ({formData.images.length}/{MAX_IMAGES})
+        </span>
+      </label>
+
+      {formData.images.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8, marginBottom: 12 }}>
+          {formData.images.map((img, idx) => (
+            <div key={idx} style={{ position: 'relative' }}>
+              <img src={img.preview} alt={`รูปที่ ${idx + 1}`}
+                style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 8, border: `2px solid ${colors.light}` }} />
+              <button onClick={() => removeImageFromForm(idx)} style={{
+                position: 'absolute', top: -6, right: -6, width: 22, height: 22,
+                borderRadius: '50%', background: '#f44336', color: 'white',
+                border: 'none', cursor: 'pointer', fontSize: 12, lineHeight: '22px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {formData.images.length < MAX_IMAGES && (
+        <label style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          padding: 16, border: `2px dashed ${colors.primary}50`, borderRadius: 10,
+          cursor: 'pointer', color: colors.primary, fontWeight: 600, fontSize: 15,
+          transition: 'all 0.2s',
+        }}>
+          <span style={{ fontSize: 22 }}>+</span> เพิ่มรูปภาพ
+          <input type="file" accept="image/*" multiple hidden
+            onChange={e => {
+              Array.from(e.target.files).forEach(f => addImageToForm(f));
+              e.target.value = '';
+            }} />
+        </label>
+      )}
+    </div>
+  );
+
+  /* ── List input (for learningActivities / obstacles) ── */
+  const renderListInput = (listField, inputField, label, placeholder, required) => {
+    const addItem = () => {
+      const val = formData[inputField].trim();
+      if (val && !formData[listField].includes(val)) {
+        setFormData(p => ({ ...p, [listField]: [...p[listField], val], [inputField]: '' }));
+      }
+    };
+    const removeItem = (idx) => {
+      setFormData(p => ({ ...p, [listField]: p[listField].filter((_, i) => i !== idx) }));
+    };
+    return (
+      <div>
+        <label style={labelStyle}>
+          {label}
+          {required && <span style={{ color: '#f44336', fontSize: 14 }}> *</span>}
+        </label>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input type="text" value={formData[inputField]} className="input-field"
+            placeholder={placeholder}
+            style={{ flex: 1 }}
+            onChange={e => setFormData(p => ({ ...p, [inputField]: e.target.value }))}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }}
+          />
+          <button type="button" onClick={addItem}
+            style={{
+              padding: '0 14px', background: colors.primary, color: 'white', border: 'none',
+              borderRadius: 8, fontSize: 18, cursor: 'pointer', fontWeight: 700,
+            }}>+</button>
+        </div>
+        {formData[listField].length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            {formData[listField].map((item, idx) => (
+              <div key={idx} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: colors.light, padding: '8px 12px', borderRadius: 8, marginBottom: 4,
+                fontSize: 14,
+              }}>
+                <span style={{ color: colors.dark }}>{idx + 1}. {item}</span>
+                <button onClick={() => removeItem(idx)}
+                  style={{ background: 'none', border: 'none', color: '#f44336', cursor: 'pointer', fontSize: 16, padding: '0 4px' }}>
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /* ── Type-specific form fields ── */
+  const renderDutyFields = () => (
+    <>
+      <div>
+        <label style={labelStyle}>กิจกรรมที่ปฏิบัติ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+        <textarea value={formData.activity} className="input-field" rows={3}
+          placeholder="รายละเอียดกิจกรรมที่ปฏิบัติ"
+          style={{ resize: 'vertical' }}
+          onChange={e => setFormData(p => ({ ...p, activity: e.target.value }))} />
+      </div>
+      <div>
+        <label style={labelStyle}>เหตุการณ์และรายละเอียด</label>
+        <textarea value={formData.eventDetail} className="input-field" rows={2}
+          placeholder="เหตุการณ์ทั่วไปปกติ"
+          style={{ resize: 'vertical' }}
+          onChange={e => setFormData(p => ({ ...p, eventDetail: e.target.value }))} />
+      </div>
+      <div>
+        <label style={labelStyle}>หมายเหตุ</label>
+        <input type="text" value={formData.note} className="input-field" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"
+          onChange={e => setFormData(p => ({ ...p, note: e.target.value }))} />
+      </div>
+    </>
+  );
+
+  const renderServiceFields = () => (
+    <>
+      <div>
+        <label style={labelStyle}>รายละเอียดที่ปฏิบัติ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+        <textarea value={formData.serviceDetail} className="input-field" rows={3}
+          placeholder="รายละเอียดการปฏิบัติงาน"
+          style={{ resize: 'vertical' }}
+          onChange={e => setFormData(p => ({ ...p, serviceDetail: e.target.value }))} />
+      </div>
+      <div>
+        <label style={labelStyle}>หมายเหตุ</label>
+        <input type="text" value={formData.note} className="input-field" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"
+          onChange={e => setFormData(p => ({ ...p, note: e.target.value }))} />
+      </div>
+    </>
+  );
+
+  const renderStudentDevFields = () => (
+    <>
+      <div>
+        <label style={labelStyle}>รูปแบบ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+        <select value={formData.learningMode} className="input-field"
+          onChange={e => setFormData(p => ({ ...p, learningMode: e.target.value }))}>
+          <option value="">-- เลือกรูปแบบ --</option>
+          <option value="onsite">Onsite</option>
+          <option value="online">Online</option>
+        </select>
+      </div>
+      <div>
+        <label style={labelStyle}>ชื่อผู้เรียน <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+        <input type="text" value={formData.studentName} className="input-field"
+          placeholder="ระบุชื่อผู้เรียน"
+          onChange={e => setFormData(p => ({ ...p, studentName: e.target.value }))} />
+      </div>
+      <div>
+        <label style={labelStyle}>ประเภทความพิการ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+        <input type="text" value={formData.disabilityType} className="input-field"
+          placeholder="ระบุประเภทความพิการ"
+          onChange={e => setFormData(p => ({ ...p, disabilityType: e.target.value }))} />
+      </div>
+      {renderListInput('learningActivities', 'learningActivityInput', 'กิจกรรมการเรียนรู้', 'พิมพ์กิจกรรมแล้วกด +', true)}
+      {renderListInput('obstacles', 'obstacleInput', 'ปัญหา/อุปสรรค', 'พิมพ์ปัญหา/อุปสรรคแล้วกด +', false)}
+    </>
+  );
+
+  const renderOtherFields = () => (
+    <>
+      <div>
+        <label style={labelStyle}>ชื่อรายงาน <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+        <input type="text" value={formData.customCategoryName} className="input-field"
+          placeholder="พิมพ์ชื่อรายงาน"
+          onChange={e => setFormData(p => ({ ...p, customCategoryName: e.target.value }))} />
+      </div>
+      {renderServiceFields()}
+    </>
+  );
+
+  /* ── Form (Step 2) ── */
+  const renderForm = () => {
+    const type = REPORT_TYPES[reportType];
+    return (
+      <div className="fade-in" style={{
+        background: 'white', padding: 25, borderRadius: 15,
+        boxShadow: '0 2px 15px rgba(0,0,0,0.08)',
+        '--theme-primary': colors.primary,
+        '--theme-dark': colors.dark,
+        '--theme-light': colors.light,
+      }}>
+        {/* Back button */}
+        <button onClick={() => { setReportStep('select'); setReportType(null); }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 0',
+            background: 'none', border: 'none', color: colors.dark,
+            fontSize: 15, fontWeight: 600, cursor: 'pointer', marginBottom: 12,
+            fontFamily: 'Sarabun, sans-serif',
+          }}>
+          ← เลือกประเภทใหม่
+        </button>
+
+        {/* Type badge */}
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          background: colors.light, color: colors.dark, padding: '8px 16px',
+          borderRadius: 20, fontSize: 14, fontWeight: 600, marginBottom: 20,
+          border: `1.5px solid ${colors.primary}30`,
+        }}>
+          <span>{type.icon}</span>
+          {type.formType === 'other' ? type.label : type.fullName || type.label}
+        </div>
+
+        <div style={{ display: 'grid', gap: 18 }}>
+          {renderDateTimeFields()}
+          {renderTagsField()}
+          {renderStaffFields()}
+          {renderLocationField()}
+
+          {/* Type-specific fields */}
+          {type.formType === 'duty' && renderDutyFields()}
+          {type.formType === 'service' && renderServiceFields()}
+          {type.formType === 'student_dev' && renderStudentDevFields()}
+          {type.formType === 'other' && renderOtherFields()}
+
+          {renderImagesField()}
+        </div>
+
+        {/* Submit */}
+        <button className="save-btn" onClick={handleSubmit} disabled={submitting}
+          style={{ background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.dark} 100%)` }}>
+          {submitting ? 'กำลังบันทึก...' : 'บันทึกรายงาน'}
+        </button>
+      </div>
+    );
+  };
 
   /* ═══════════════════════════════════════════
      RENDER: LOGIN SCREEN
@@ -559,7 +1056,7 @@ function App() {
               <h2 style={{ fontSize: 20, fontWeight: 600, color: '#333', marginBottom: 20, textAlign: 'center' }}>
                 เข้าสู่ระบบ
               </h2>
-              <label style={labelStyle}>เบอร์โทรศัพท์</label>
+              <label style={{ display: 'block', fontWeight: 600, color: DARK_BLUE, marginBottom: 8, fontSize: 15 }}>เบอร์โทรศัพท์</label>
               <input
                 type="tel"
                 className="input-field"
@@ -595,7 +1092,7 @@ function App() {
               <p style={{ textAlign: 'center', color: '#666', fontSize: 14, margin: '0 0 20px' }}>
                 กรอกรหัส OTP ที่ส่งไปทาง Telegram
               </p>
-              <label style={labelStyle}>รหัส OTP</label>
+              <label style={{ display: 'block', fontWeight: 600, color: DARK_BLUE, marginBottom: 8, fontSize: 15 }}>รหัส OTP</label>
               <input
                 type="text"
                 className="input-field"
@@ -662,22 +1159,22 @@ function App() {
           }}>
             {/* Spinner */}
             <div style={{
-              width: 48, height: 48, border: `4px solid ${LIGHT_BLUE}`,
-              borderTop: `4px solid ${BLUE}`, borderRadius: '50%',
+              width: 48, height: 48, border: `4px solid ${colors.light}`,
+              borderTop: `4px solid ${colors.primary}`, borderRadius: '50%',
               margin: '0 auto 20px', animation: 'spin 0.8s linear infinite',
             }} />
             {uploadProgress.step === 'upload' ? (
               <>
-                <div style={{ fontSize: 18, fontWeight: 700, color: DARK_BLUE, marginBottom: 8 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: colors.dark, marginBottom: 8 }}>
                   กำลังอัปโหลดรูปภาพ
                 </div>
-                <div style={{ fontSize: 32, fontWeight: 800, color: BLUE, marginBottom: 8 }}>
+                <div style={{ fontSize: 32, fontWeight: 800, color: colors.primary, marginBottom: 8 }}>
                   {uploadProgress.current}/{uploadProgress.total}
                 </div>
                 {/* Progress bar */}
-                <div style={{ background: LIGHT_BLUE, borderRadius: 10, height: 8, overflow: 'hidden' }}>
+                <div style={{ background: colors.light, borderRadius: 10, height: 8, overflow: 'hidden' }}>
                   <div style={{
-                    background: `linear-gradient(90deg, ${BLUE}, ${DARK_BLUE})`,
+                    background: `linear-gradient(90deg, ${colors.primary}, ${colors.dark})`,
                     height: '100%', borderRadius: 10,
                     width: `${uploadProgress.total > 0 ? (uploadProgress.current / uploadProgress.total) * 100 : 0}%`,
                     transition: 'width 0.3s ease',
@@ -689,7 +1186,7 @@ function App() {
               </>
             ) : (
               <>
-                <div style={{ fontSize: 18, fontWeight: 700, color: DARK_BLUE, marginBottom: 8 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: colors.dark, marginBottom: 8 }}>
                   กำลังบันทึกรายงาน
                 </div>
                 <div style={{ fontSize: 13, color: '#999' }}>
@@ -701,7 +1198,7 @@ function App() {
         </div>
       )}
 
-      {/* Header + User Info */}
+      {/* Header + User Info — always blue */}
       <div style={{
         background: `linear-gradient(135deg, ${BLUE} 0%, ${DARK_BLUE} 100%)`,
         color: 'white', padding: '24px 25px', borderRadius: 15, marginBottom: 25,
@@ -745,221 +1242,8 @@ function App() {
         </div>
       </div>
 
-      {/* Form */}
-      <div style={{ background: 'white', padding: 25, borderRadius: 15, boxShadow: '0 2px 15px rgba(0,0,0,0.08)' }}>
-        <div style={{ display: 'grid', gap: 18 }}>
-
-          {/* Row: Date + Time */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <label style={labelStyle}>วันที่ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
-              <input type="date" value={formData.reportDate} className="input-field"
-                onChange={e => setFormData(p => ({ ...p, reportDate: e.target.value }))} />
-            </div>
-            <div>
-              <label style={labelStyle}>เวลาปฏิบัติหน้าที่ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
-              <input type="time" value={formData.dutyTime} className="input-field"
-                onChange={e => setFormData(p => ({ ...p, dutyTime: e.target.value }))} />
-            </div>
-          </div>
-
-          {/* Category (typeable + suggestions) */}
-          <div style={{ position: 'relative' }}>
-            <label style={labelStyle}>ประเภท</label>
-            <input type="text" value={formData.category} className="input-field"
-              placeholder="พิมพ์หรือเลือกประเภท"
-              onChange={e => { setFormData(p => ({ ...p, category: e.target.value })); setShowCatDropdown(true); }}
-              onFocus={() => setShowCatDropdown(true)}
-              onBlur={() => setTimeout(() => setShowCatDropdown(false), 150)}
-            />
-            {showCatDropdown && (
-              <div style={{
-                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                background: 'white', border: `2px solid ${LIGHT_BLUE}`, borderRadius: 8,
-                maxHeight: 200, overflowY: 'auto', marginTop: 4,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-              }}>
-                {allCategories
-                  .filter(c => c.toLowerCase().includes((formData.category || '').toLowerCase()))
-                  .map(c => (
-                    <div key={c}
-                      onMouseDown={() => { setFormData(p => ({ ...p, category: c })); setShowCatDropdown(false); }}
-                      style={{
-                        padding: '10px 14px', cursor: 'pointer', fontSize: 15,
-                        background: formData.category === c ? LIGHT_BLUE : 'white',
-                        borderBottom: `1px solid ${LIGHT_BLUE}`,
-                      }}
-                    >
-                      {c}
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-
-          {/* Tags (typeable + saved suggestions) */}
-          <div>
-            <label style={labelStyle}>แท็ก</label>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input type="text" value={formData.tagInput} className="input-field"
-                placeholder="พิมพ์แท็กแล้ว Enter"
-                style={{ flex: 1 }}
-                onChange={e => setFormData(p => ({ ...p, tagInput: e.target.value }))}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const val = formData.tagInput.replace(/^#/, '').trim();
-                    if (val && !formData.tags.includes(val)) {
-                      setFormData(p => ({ ...p, tags: [...p.tags, val], tagInput: '' }));
-                    }
-                  }
-                }} />
-              <button type="button" onClick={() => {
-                const val = formData.tagInput.replace(/^#/, '').trim();
-                if (val && !formData.tags.includes(val)) {
-                  setFormData(p => ({ ...p, tags: [...p.tags, val], tagInput: '' }));
-                }
-              }} style={{
-                padding: '0 14px', background: BLUE, color: 'white', border: 'none',
-                borderRadius: 8, fontSize: 18, cursor: 'pointer', fontWeight: 700,
-              }}>+</button>
-            </div>
-
-            {/* Selected tags */}
-            {formData.tags.length > 0 && (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                {formData.tags.map((tag, i) => (
-                  <span key={i} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    background: LIGHT_BLUE, color: DARK_BLUE, padding: '4px 10px',
-                    borderRadius: 20, fontSize: 13, fontWeight: 600,
-                  }}>
-                    #{tag}
-                    <button onClick={() => setFormData(p => ({ ...p, tags: p.tags.filter((_, j) => j !== i) }))}
-                      style={{ background: 'none', border: 'none', color: DARK_BLUE, cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>
-                      ✕
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Saved tag suggestions */}
-            {allSavedTags.filter(t => !formData.tags.includes(t)).length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                <span style={{ fontSize: 12, color: '#999' }}>แท็กที่เคยใช้:</span>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-                  {allSavedTags.filter(t => !formData.tags.includes(t)).map(tag => (
-                    <button key={tag} type="button"
-                      onClick={() => setFormData(p => ({ ...p, tags: [...p.tags, tag] }))}
-                      style={{
-                        background: 'white', border: `1.5px solid ${LIGHT_BLUE}`, color: DARK_BLUE,
-                        padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 500,
-                        cursor: 'pointer', fontFamily: 'Sarabun, sans-serif',
-                      }}>
-                      + #{tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Row: Name (readonly) + Position (readonly) */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <label style={labelStyle}>ผู้รายงาน</label>
-              <input type="text" value={formData.staffName} className="input-field"
-                readOnly style={{ background: '#f5f5f5', color: '#666' }} />
-            </div>
-            <div>
-              <label style={labelStyle}>ตำแหน่ง</label>
-              <input type="text" value={formData.position} className="input-field"
-                readOnly style={{ background: '#f5f5f5', color: '#666' }} />
-            </div>
-          </div>
-
-          {/* Location */}
-          <div>
-            <label style={labelStyle}>สถานที่ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
-            <input type="text" value={formData.location} className="input-field" placeholder="ระบุสถานที่ปฏิบัติหน้าที่"
-              onChange={e => setFormData(p => ({ ...p, location: e.target.value }))} />
-          </div>
-
-          {/* Activity */}
-          <div>
-            <label style={labelStyle}>กิจกรรมที่ปฏิบัติ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
-            <textarea value={formData.activity} className="input-field" rows={3}
-              placeholder="รายละเอียดกิจกรรมที่ปฏิบัติ"
-              style={{ resize: 'vertical' }}
-              onChange={e => setFormData(p => ({ ...p, activity: e.target.value }))} />
-          </div>
-
-          {/* Event Detail */}
-          <div>
-            <label style={labelStyle}>เหตุการณ์และรายละเอียด</label>
-            <textarea value={formData.eventDetail} className="input-field" rows={2}
-              placeholder="เหตุการณ์ทั่วไปปกติ"
-              style={{ resize: 'vertical' }}
-              onChange={e => setFormData(p => ({ ...p, eventDetail: e.target.value }))} />
-          </div>
-
-          {/* Note */}
-          <div>
-            <label style={labelStyle}>หมายเหตุ</label>
-            <input type="text" value={formData.note} className="input-field" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"
-              onChange={e => setFormData(p => ({ ...p, note: e.target.value }))} />
-          </div>
-
-          {/* Images */}
-          <div>
-            <label style={labelStyle}>
-              รูปถ่าย <span style={{ color: '#f44336', fontSize: 14 }}>*</span>
-              <span style={{ fontWeight: 400, color: '#999', fontSize: 13, marginLeft: 8 }}>
-                ({formData.images.length}/{MAX_IMAGES})
-              </span>
-            </label>
-
-            {formData.images.length > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8, marginBottom: 12 }}>
-                {formData.images.map((img, idx) => (
-                  <div key={idx} style={{ position: 'relative' }}>
-                    <img src={img.preview} alt={`รูปที่ ${idx + 1}`}
-                      style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 8, border: `2px solid ${LIGHT_BLUE}` }} />
-                    <button onClick={() => removeImageFromForm(idx)} style={{
-                      position: 'absolute', top: -6, right: -6, width: 22, height: 22,
-                      borderRadius: '50%', background: '#f44336', color: 'white',
-                      border: 'none', cursor: 'pointer', fontSize: 12, lineHeight: '22px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>✕</button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {formData.images.length < MAX_IMAGES && (
-              <label style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                padding: 16, border: `2px dashed ${LIGHT_BLUE}`, borderRadius: 10,
-                cursor: 'pointer', color: BLUE, fontWeight: 600, fontSize: 15,
-                transition: 'all 0.2s',
-              }}>
-                <span style={{ fontSize: 22 }}>+</span> เพิ่มรูปภาพ
-                <input type="file" accept="image/*" multiple hidden
-                  onChange={e => {
-                    Array.from(e.target.files).forEach(f => addImageToForm(f));
-                    e.target.value = '';
-                  }} />
-              </label>
-            )}
-          </div>
-        </div>
-
-        {/* Submit */}
-        <button className="save-btn" onClick={handleSubmit} disabled={submitting}>
-          {submitting ? 'กำลังบันทึก...' : 'บันทึกรายงาน'}
-        </button>
-      </div>
+      {/* Content: step-based */}
+      {reportStep === 'select' ? renderTypeSelection() : renderForm()}
     </div>
   );
 }

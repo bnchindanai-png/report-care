@@ -24,7 +24,7 @@ body {
 .input-field {
   width: 100%;
   padding: 12px 15px;
-  border: 2px solid #E3F2FD;
+  border: 2px solid var(--theme-light, #E3F2FD);
   border-radius: 8px;
   font-size: 16px;
   font-family: 'Sarabun', sans-serif;
@@ -32,7 +32,7 @@ body {
   outline: none;
   box-sizing: border-box;
 }
-.input-field:focus { border-color: #2196F3; }
+.input-field:focus { border-color: var(--theme-primary, #2196F3); }
 select.input-field {
   appearance: auto;
   background: white;
@@ -58,3 +58,9 @@ select.input-field {
   box-shadow: 0 4px 15px rgba(33,150,243,0.4);
 }
 .save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn 0.3s ease; }
