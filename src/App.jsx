@@ -58,6 +58,7 @@ function App() {
   };
   const [formData,   setFormData]   = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, step: '' });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   /* ── Shared categories & tags (DB) ── */
@@ -256,10 +257,18 @@ function App() {
   };
 
   const uploadAllImages = async (images) => {
+    const total = images.filter(img => img.file).length;
+    let current = 0;
+    setUploadProgress({ current: 0, total, step: 'upload' });
     const urls = [];
     for (const img of images) {
-      if (img.file)             urls.push(await uploadImage(img.file));
-      else if (img.existingUrl) urls.push(img.existingUrl);
+      if (img.file) {
+        current++;
+        setUploadProgress({ current, total, step: 'upload' });
+        urls.push(await uploadImage(img.file));
+      } else if (img.existingUrl) {
+        urls.push(img.existingUrl);
+      }
     }
     return urls;
   };
@@ -288,6 +297,7 @@ function App() {
     setSubmitting(true);
     try {
       const images = await uploadAllImages(formData.images);
+      setUploadProgress(p => ({ ...p, step: 'saving' }));
       await apiCall('/create-feed-post', {
         title: formData.activity,
         description: buildDescription(formData),
@@ -316,7 +326,7 @@ function App() {
       }
       showNotif('เกิดข้อผิดพลาดในการบันทึก: ' + (e.message || ''), 'error');
     }
-    finally { setSubmitting(false); }
+    finally { setSubmitting(false); setUploadProgress({ current: 0, total: 0, step: '' }); }
   };
 
   /* ═══════════════════════════════════════════
@@ -459,6 +469,58 @@ function App() {
           borderLeft: `5px solid ${toast.type === 'success' ? '#4CAF50' : '#f44336'}`,
         }}>
           {toast.message}
+        </div>
+      )}
+
+      {/* Upload Progress Modal */}
+      {submitting && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', zIndex: 2000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            background: 'white', borderRadius: 16, padding: '32px 40px',
+            textAlign: 'center', minWidth: 280, boxShadow: '0 8px 30px rgba(0,0,0,0.2)',
+          }}>
+            {/* Spinner */}
+            <div style={{
+              width: 48, height: 48, border: `4px solid ${LIGHT_BLUE}`,
+              borderTop: `4px solid ${BLUE}`, borderRadius: '50%',
+              margin: '0 auto 20px', animation: 'spin 0.8s linear infinite',
+            }} />
+            {uploadProgress.step === 'upload' ? (
+              <>
+                <div style={{ fontSize: 18, fontWeight: 700, color: DARK_BLUE, marginBottom: 8 }}>
+                  กำลังอัปโหลดรูปภาพ
+                </div>
+                <div style={{ fontSize: 32, fontWeight: 800, color: BLUE, marginBottom: 8 }}>
+                  {uploadProgress.current}/{uploadProgress.total}
+                </div>
+                {/* Progress bar */}
+                <div style={{ background: LIGHT_BLUE, borderRadius: 10, height: 8, overflow: 'hidden' }}>
+                  <div style={{
+                    background: `linear-gradient(90deg, ${BLUE}, ${DARK_BLUE})`,
+                    height: '100%', borderRadius: 10,
+                    width: `${uploadProgress.total > 0 ? (uploadProgress.current / uploadProgress.total) * 100 : 0}%`,
+                    transition: 'width 0.3s ease',
+                  }} />
+                </div>
+                <div style={{ fontSize: 13, color: '#999', marginTop: 8 }}>
+                  กรุณารอสักครู่...
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 18, fontWeight: 700, color: DARK_BLUE, marginBottom: 8 }}>
+                  กำลังบันทึกรายงาน
+                </div>
+                <div style={{ fontSize: 13, color: '#999' }}>
+                  กรุณารอสักครู่...
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
