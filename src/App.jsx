@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 const API_BASE = 'https://ikfioqvjrhquiyeylmsv.supabase.co/functions/v1';
-const UPLOAD_URL = 'https://ikfioqvjrhquiyeylmsv.supabase.co/functions/v1/upload-image';
+const UPLOAD_URL = 'https://ikfioqvjrhquiyeylmsv.supabase.co/functions/v1/upload-report-image';
 const MAX_IMAGES = 100;
 
 const BLUE       = '#2196F3';
