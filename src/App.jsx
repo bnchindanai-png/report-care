@@ -8,7 +8,7 @@ const BLUE       = '#2196F3';
 const DARK_BLUE  = '#1976D2';
 const LIGHT_BLUE = '#E3F2FD';
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   'รายงานหน้าที่',
   'ข่าวสาร',
   'กิจกรรม',
@@ -50,12 +50,17 @@ function App() {
   const emptyForm = {
     reportDate: '', dutyTime: '', staffName: '', position: '',
     location: '', activity: '', eventDetail: '', note: '',
-    category: 'รายงานหน้าที่', tags: [], tagInput: '',
+    category: 'รายงานหน้าที่', tags: [], tagInput: '', categoryInput: '',
     images: [],
   };
   const [formData,   setFormData]   = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  /* ── Saved categories & tags (localStorage) ── */
+  const [savedCategories, setSavedCategories] = useState([]);
+  const [savedTags, setSavedTags] = useState([]);
+  const [showCatDropdown, setShowCatDropdown] = useState(false);
 
   /* ── Init: check localStorage ── */
   useEffect(() => {
@@ -75,7 +80,39 @@ function App() {
         }));
       } catch { /* invalid profile, stay on login */ }
     }
+    // Load saved categories & tags
+    try {
+      const cats = JSON.parse(localStorage.getItem('saved_categories') || '[]');
+      if (Array.isArray(cats)) setSavedCategories(cats);
+    } catch {}
+    try {
+      const tags = JSON.parse(localStorage.getItem('saved_tags') || '[]');
+      if (Array.isArray(tags)) setSavedTags(tags);
+    } catch {}
   }, []);
+
+  /* ── helpers: persist categories & tags ── */
+  const allCategories = [...new Set([...DEFAULT_CATEGORIES, ...savedCategories])];
+
+  const saveCategory = (cat) => {
+    if (!cat || DEFAULT_CATEGORIES.includes(cat)) return;
+    setSavedCategories(prev => {
+      const next = [...new Set([...prev, cat])];
+      localStorage.setItem('saved_categories', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const saveTag = (tag) => {
+    if (!tag) return;
+    setSavedTags(prev => {
+      const next = [...new Set([...prev, tag])];
+      localStorage.setItem('saved_tags', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const allSavedTags = [...new Set([...savedTags])];
 
   /* ─── helpers ─── */
   const getCurrentDate = () => new Date().toISOString().split('T')[0];
@@ -234,6 +271,10 @@ function App() {
         images,
         location: formData.location ? { name: formData.location } : null,
       }, authToken);
+
+      // Save custom category & tags for future use
+      saveCategory(formData.category);
+      formData.tags.forEach(t => saveTag(t));
 
       showNotif('บันทึกรายงานสำเร็จ', 'success');
       setFormData(prev => ({
@@ -458,59 +499,106 @@ function App() {
             </div>
           </div>
 
-          {/* Row: Category + Tags */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <label style={labelStyle}>ประเภท</label>
-              <select value={formData.category} className="input-field"
-                onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}>
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>แท็ก</label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input type="text" value={formData.tagInput} className="input-field"
-                  placeholder="พิมพ์แท็กแล้ว Enter"
-                  style={{ flex: 1 }}
-                  onChange={e => setFormData(p => ({ ...p, tagInput: e.target.value }))}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      const val = formData.tagInput.replace(/^#/, '').trim();
-                      if (val && !formData.tags.includes(val)) {
-                        setFormData(p => ({ ...p, tags: [...p.tags, val], tagInput: '' }));
-                      }
-                    }
-                  }} />
-                <button type="button" onClick={() => {
-                  const val = formData.tagInput.replace(/^#/, '').trim();
-                  if (val && !formData.tags.includes(val)) {
-                    setFormData(p => ({ ...p, tags: [...p.tags, val], tagInput: '' }));
-                  }
-                }} style={{
-                  padding: '0 14px', background: BLUE, color: 'white', border: 'none',
-                  borderRadius: 8, fontSize: 18, cursor: 'pointer', fontWeight: 700,
-                }}>+</button>
+          {/* Category (typeable + suggestions) */}
+          <div style={{ position: 'relative' }}>
+            <label style={labelStyle}>ประเภท</label>
+            <input type="text" value={formData.category} className="input-field"
+              placeholder="พิมพ์หรือเลือกประเภท"
+              onChange={e => { setFormData(p => ({ ...p, category: e.target.value })); setShowCatDropdown(true); }}
+              onFocus={() => setShowCatDropdown(true)}
+              onBlur={() => setTimeout(() => setShowCatDropdown(false), 150)}
+            />
+            {showCatDropdown && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+                background: 'white', border: `2px solid ${LIGHT_BLUE}`, borderRadius: 8,
+                maxHeight: 200, overflowY: 'auto', marginTop: 4,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              }}>
+                {allCategories
+                  .filter(c => c.toLowerCase().includes((formData.category || '').toLowerCase()))
+                  .map(c => (
+                    <div key={c}
+                      onMouseDown={() => { setFormData(p => ({ ...p, category: c })); setShowCatDropdown(false); }}
+                      style={{
+                        padding: '10px 14px', cursor: 'pointer', fontSize: 15,
+                        background: formData.category === c ? LIGHT_BLUE : 'white',
+                        borderBottom: `1px solid ${LIGHT_BLUE}`,
+                      }}
+                    >
+                      {c}
+                    </div>
+                  ))}
               </div>
-              {formData.tags.length > 0 && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                  {formData.tags.map((tag, i) => (
-                    <span key={i} style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                      background: LIGHT_BLUE, color: DARK_BLUE, padding: '4px 10px',
-                      borderRadius: 20, fontSize: 13, fontWeight: 600,
-                    }}>
-                      #{tag}
-                      <button onClick={() => setFormData(p => ({ ...p, tags: p.tags.filter((_, j) => j !== i) }))}
-                        style={{ background: 'none', border: 'none', color: DARK_BLUE, cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>
-                        ✕
-                      </button>
-                    </span>
+            )}
+          </div>
+
+          {/* Tags (typeable + saved suggestions) */}
+          <div>
+            <label style={labelStyle}>แท็ก</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input type="text" value={formData.tagInput} className="input-field"
+                placeholder="พิมพ์แท็กแล้ว Enter"
+                style={{ flex: 1 }}
+                onChange={e => setFormData(p => ({ ...p, tagInput: e.target.value }))}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const val = formData.tagInput.replace(/^#/, '').trim();
+                    if (val && !formData.tags.includes(val)) {
+                      setFormData(p => ({ ...p, tags: [...p.tags, val], tagInput: '' }));
+                    }
+                  }
+                }} />
+              <button type="button" onClick={() => {
+                const val = formData.tagInput.replace(/^#/, '').trim();
+                if (val && !formData.tags.includes(val)) {
+                  setFormData(p => ({ ...p, tags: [...p.tags, val], tagInput: '' }));
+                }
+              }} style={{
+                padding: '0 14px', background: BLUE, color: 'white', border: 'none',
+                borderRadius: 8, fontSize: 18, cursor: 'pointer', fontWeight: 700,
+              }}>+</button>
+            </div>
+
+            {/* Selected tags */}
+            {formData.tags.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                {formData.tags.map((tag, i) => (
+                  <span key={i} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    background: LIGHT_BLUE, color: DARK_BLUE, padding: '4px 10px',
+                    borderRadius: 20, fontSize: 13, fontWeight: 600,
+                  }}>
+                    #{tag}
+                    <button onClick={() => setFormData(p => ({ ...p, tags: p.tags.filter((_, j) => j !== i) }))}
+                      style={{ background: 'none', border: 'none', color: DARK_BLUE, cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Saved tag suggestions */}
+            {allSavedTags.filter(t => !formData.tags.includes(t)).length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <span style={{ fontSize: 12, color: '#999' }}>แท็กที่เคยใช้:</span>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                  {allSavedTags.filter(t => !formData.tags.includes(t)).map(tag => (
+                    <button key={tag} type="button"
+                      onClick={() => setFormData(p => ({ ...p, tags: [...p.tags, tag] }))}
+                      style={{
+                        background: 'white', border: `1.5px solid ${LIGHT_BLUE}`, color: DARK_BLUE,
+                        padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 500,
+                        cursor: 'pointer', fontFamily: 'Sarabun, sans-serif',
+                      }}>
+                      + #{tag}
+                    </button>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Row: Name (readonly) + Position (readonly) */}
