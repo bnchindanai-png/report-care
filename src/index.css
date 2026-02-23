@@ -29,6 +29,11 @@ body {
   box-sizing: border-box;
 }
 .input-field:focus { border-color: #2196F3; }
+select.input-field {
+  appearance: auto;
+  background: white;
+  cursor: pointer;
+}
 
 .save-btn {
   width: 100%;

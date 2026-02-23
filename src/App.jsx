@@ -9,11 +9,22 @@ const BLUE       = '#2196F3';
 const DARK_BLUE  = '#1976D2';
 const LIGHT_BLUE = '#E3F2FD';
 
+const CATEGORIES = [
+  'รายงานหน้าที่',
+  'ข่าวสาร',
+  'กิจกรรม',
+  'ประชุม',
+  'อบรม/สัมมนา',
+  'เยี่ยมบ้าน',
+  'อื่นๆ',
+];
+
 /* ─── field mapping helpers ─── */
 const buildTags = (form) => {
   const tags = [];
   if (form.reportDate) tags.push(`report_date:${form.reportDate}`);
   if (form.dutyTime)   tags.push(`duty_time:${form.dutyTime}`);
+  if (Array.isArray(form.tags)) form.tags.forEach(t => tags.push(t));
   return tags;
 };
 
@@ -40,6 +51,7 @@ function App() {
   const emptyForm = {
     reportDate: '', dutyTime: '', staffName: '', position: '',
     location: '', activity: '', eventDetail: '', note: '',
+    category: 'รายงานหน้าที่', tags: [], tagInput: '',
     images: [],
   };
   const [formData,   setFormData]   = useState(emptyForm);
@@ -209,7 +221,7 @@ function App() {
       await apiCall('/create-feed-post', {
         title: formData.activity,
         description: buildDescription(formData),
-        category: 'รายงานหน้าที่',
+        category: formData.category || 'รายงานหน้าที่',
         tags: buildTags(formData),
         images,
         location: formData.location ? { name: formData.location } : null,
@@ -433,8 +445,63 @@ function App() {
             </div>
             <div>
               <label style={labelStyle}>เวลาปฏิบัติหน้าที่ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
-              <input type="text" value={formData.dutyTime} className="input-field" placeholder="เช่น 08.30"
+              <input type="time" value={formData.dutyTime} className="input-field"
                 onChange={e => setFormData(p => ({ ...p, dutyTime: e.target.value }))} />
+            </div>
+          </div>
+
+          {/* Row: Category + Tags */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <label style={labelStyle}>ประเภท</label>
+              <select value={formData.category} className="input-field"
+                onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}>
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>แท็ก</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input type="text" value={formData.tagInput} className="input-field"
+                  placeholder="พิมพ์แท็กแล้ว Enter"
+                  style={{ flex: 1 }}
+                  onChange={e => setFormData(p => ({ ...p, tagInput: e.target.value }))}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const val = formData.tagInput.replace(/^#/, '').trim();
+                      if (val && !formData.tags.includes(val)) {
+                        setFormData(p => ({ ...p, tags: [...p.tags, val], tagInput: '' }));
+                      }
+                    }
+                  }} />
+                <button type="button" onClick={() => {
+                  const val = formData.tagInput.replace(/^#/, '').trim();
+                  if (val && !formData.tags.includes(val)) {
+                    setFormData(p => ({ ...p, tags: [...p.tags, val], tagInput: '' }));
+                  }
+                }} style={{
+                  padding: '0 14px', background: BLUE, color: 'white', border: 'none',
+                  borderRadius: 8, fontSize: 18, cursor: 'pointer', fontWeight: 700,
+                }}>+</button>
+              </div>
+              {formData.tags.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                  {formData.tags.map((tag, i) => (
+                    <span key={i} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      background: LIGHT_BLUE, color: DARK_BLUE, padding: '4px 10px',
+                      borderRadius: 20, fontSize: 13, fontWeight: 600,
+                    }}>
+                      #{tag}
+                      <button onClick={() => setFormData(p => ({ ...p, tags: p.tags.filter((_, j) => j !== i) }))}
+                        style={{ background: 'none', border: 'none', color: DARK_BLUE, cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
