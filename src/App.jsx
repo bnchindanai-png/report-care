@@ -127,8 +127,9 @@ function App() {
       }
     };
     // Fix white screen on mobile when switching back from another app
+    // Skip repaint if upload is in progress (page is clearly still alive)
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && !uploadAbortRef.current) {
         requestAnimationFrame(() => {
           document.documentElement.style.display = 'none';
           void document.documentElement.offsetHeight;
