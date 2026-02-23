@@ -256,21 +256,50 @@ function App() {
     return data.url;
   };
 
+  /* Extract file name from public URL for deletion */
+  const fileNameFromUrl = (url) => {
+    const prefix = `${SUPABASE_URL}/storage/v1/object/public/report-images/`;
+    return url.startsWith(prefix) ? url.slice(prefix.length) : null;
+  };
+
+  /* Delete uploaded images from storage (cleanup on failure) */
+  const deleteUploadedImages = async (urls) => {
+    const files = urls.map(fileNameFromUrl).filter(Boolean);
+    if (files.length === 0) return;
+    try {
+      await fetch(UPLOAD_URL, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ files }),
+      });
+    } catch { /* best-effort cleanup */ }
+  };
+
   const uploadAllImages = async (images) => {
     const total = images.filter(img => img.file).length;
     let current = 0;
     setUploadProgress({ current: 0, total, step: 'upload' });
-    const urls = [];
-    for (const img of images) {
-      if (img.file) {
-        current++;
-        setUploadProgress({ current, total, step: 'upload' });
-        urls.push(await uploadImage(img.file));
-      } else if (img.existingUrl) {
-        urls.push(img.existingUrl);
+    const uploadedUrls = []; // track for cleanup on failure
+    try {
+      for (const img of images) {
+        if (img.file) {
+          current++;
+          setUploadProgress({ current, total, step: 'upload' });
+          const url = await uploadImage(img.file);
+          uploadedUrls.push(url);
+        } else if (img.existingUrl) {
+          uploadedUrls.push(img.existingUrl);
+        }
       }
+      return uploadedUrls;
+    } catch (err) {
+      // Upload interrupted — delete all successfully uploaded images
+      await deleteUploadedImages(uploadedUrls);
+      throw err;
     }
-    return urls;
   };
 
   const addImageToForm = (file) => {
@@ -295,15 +324,16 @@ function App() {
       return;
     }
     setSubmitting(true);
+    let uploadedImages = [];
     try {
-      const images = await uploadAllImages(formData.images);
+      uploadedImages = await uploadAllImages(formData.images);
       setUploadProgress(p => ({ ...p, step: 'saving' }));
       await apiCall('/create-feed-post', {
         title: formData.activity,
         description: buildDescription(formData),
         category: formData.category || 'รายงานหน้าที่',
         tags: buildTags(formData),
-        images,
+        images: uploadedImages,
         location: formData.location ? { name: formData.location } : null,
       }, authToken);
 
@@ -319,6 +349,10 @@ function App() {
         position: prev.position,
       }));
     } catch (e) {
+      // Cleanup uploaded images if create-feed-post failed
+      if (uploadedImages.length > 0) {
+        await deleteUploadedImages(uploadedImages);
+      }
       if (e.status === 401 && e.error === 'invalid_token') {
         showNotif('Token หมดอายุ กรุณาเข้าสู่ระบบใหม่', 'error');
         handleLogout();
