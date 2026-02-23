@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const STORAGE_KEY  = import.meta.env.VITE_SUPABASE_SERVICE_KEY;
 const API_BASE = 'https://ikfioqvjrhquiyeylmsv.supabase.co/functions/v1';
-const BUCKET = 'report-images';
+const UPLOAD_URL = 'https://qopbfehtosvdlvihutzx.supabase.co/functions/v1/upload-image';
 const MAX_IMAGES = 100;
 
 const BLUE       = '#2196F3';
@@ -181,20 +179,18 @@ function App() {
   const uploadImage = async (file) => {
     const ext  = file.name.split('.').pop();
     const name = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${name}`, {
+    const res = await fetch(UPLOAD_URL, {
       method: 'POST',
       headers: {
-        'apikey': STORAGE_KEY,
-        'Authorization': `Bearer ${STORAGE_KEY}`,
+        'Authorization': `Bearer ${authToken}`,
         'Content-Type': file.type || 'image/jpeg',
+        'x-file-name': name,
       },
       body: file,
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Upload failed');
-    }
-    return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${name}`;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    return data.url;
   };
 
   const uploadAllImages = async (images) => {
