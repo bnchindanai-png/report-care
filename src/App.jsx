@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const SUPABASE_URL = 'https://ikfioqvjrhquiyeylmsv.supabase.co';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZmlvcXZqcmhxdWl5ZXlsbXN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4MzQ3MTcsImV4cCI6MjA2NjQxMDcxN30.m0RHqLl6RmM5rTN-TU3YrcvHNpSB9FnH_XN_Y3uhhRc';
@@ -61,6 +61,9 @@ function App() {
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, step: '' });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
+  /* ── Upload abort controller ── */
+  const uploadAbortRef = useRef(null);
+
   /* ── Shared categories & tags (DB) ── */
   const [dbCategories, setDbCategories] = useState([]);
   const [dbTags, setDbTags] = useState([]);
@@ -108,6 +111,27 @@ function App() {
     // Load shared categories & tags from DB
     fetchCategories();
     fetchTags();
+  }, []);
+
+  /* ── Abort upload on network loss / warn before page close ── */
+  useEffect(() => {
+    const handleOffline = () => {
+      if (uploadAbortRef.current) {
+        uploadAbortRef.current.abort();
+      }
+    };
+    const handleBeforeUnload = (e) => {
+      if (uploadAbortRef.current) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, []);
 
   /* ── helpers: fetch & persist categories & tags via REST API ── */
@@ -292,7 +316,7 @@ function App() {
     img.src = url;
   });
 
-  const uploadImage = async (rawFile) => {
+  const uploadImage = async (rawFile, signal) => {
     const file = await compressImage(rawFile);
     const ext  = file.name.split('.').pop();
     const name = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
@@ -304,6 +328,7 @@ function App() {
         'x-file-name': name,
       },
       body: file,
+      signal,
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Upload failed');
@@ -338,12 +363,17 @@ function App() {
     setUploadProgress({ current: 0, total, step: 'upload' });
     const uploadedUrls = []; // track for cleanup on failure
     localStorage.setItem('pending_uploads', JSON.stringify([]));
+
+    // Create AbortController so offline/beforeunload can cancel uploads
+    const abortCtrl = new AbortController();
+    uploadAbortRef.current = abortCtrl;
+
     try {
       for (const img of images) {
         if (img.file) {
           current++;
           setUploadProgress({ current, total, step: 'upload' });
-          const url = await uploadImage(img.file);
+          const url = await uploadImage(img.file, abortCtrl.signal);
           uploadedUrls.push(url);
           // Persist to localStorage so cleanup works even if app is killed
           localStorage.setItem('pending_uploads', JSON.stringify(uploadedUrls));
@@ -356,7 +386,10 @@ function App() {
       // Upload interrupted — delete all successfully uploaded images
       await deleteUploadedImages(uploadedUrls);
       localStorage.removeItem('pending_uploads');
-      throw err;
+      const isAbort = err.name === 'AbortError';
+      throw isAbort ? new Error('การอัปโหลดถูกยกเลิก (สัญญาณขาดหาย)') : err;
+    } finally {
+      uploadAbortRef.current = null;
     }
   };
 
