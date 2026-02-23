@@ -126,11 +126,29 @@ function App() {
         e.returnValue = '';
       }
     };
+    // Fix white screen on mobile when switching back from another app
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestAnimationFrame(() => {
+          document.documentElement.style.display = 'none';
+          void document.documentElement.offsetHeight;
+          document.documentElement.style.display = '';
+        });
+      }
+    };
+    // BFCache restore: page restored from back/forward cache → reload
+    const handlePageShow = (e) => {
+      if (e.persisted) window.location.reload();
+    };
     window.addEventListener('offline', handleOffline);
     window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pageshow', handlePageShow);
     return () => {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pageshow', handlePageShow);
     };
   }, []);
 
