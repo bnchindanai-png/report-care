@@ -116,7 +116,7 @@ function App() {
   const saveCategory = async (cat) => {
     if (!cat) return;
     try {
-      await fetch(`${REST_BASE}/shared_categories`, {
+      await fetch(`${REST_BASE}/shared_categories?on_conflict=name`, {
         method: 'POST',
         headers: { ...restHeaders, 'Prefer': 'resolution=ignore-duplicates' },
         body: JSON.stringify({ name: cat }),
@@ -128,7 +128,7 @@ function App() {
   const saveTag = async (tag) => {
     if (!tag) return;
     try {
-      await fetch(`${REST_BASE}/shared_tags`, {
+      await fetch(`${REST_BASE}/shared_tags?on_conflict=name`, {
         method: 'POST',
         headers: { ...restHeaders, 'Prefer': 'resolution=ignore-duplicates' },
         body: JSON.stringify({ name: tag }),
