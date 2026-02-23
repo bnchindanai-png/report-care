@@ -75,14 +75,35 @@ function App() {
         const p = JSON.parse(profile);
         setAuthToken(token);
         setUserProfile(p);
-        const today = getCurrentDate();
         setFormData(prev => ({
           ...prev,
-          reportDate: today,
+          reportDate: getCurrentDate(),
+          dutyTime: getCurrentTime(),
           staffName: p.name || '',
           position: p.position || '',
         }));
       } catch { /* invalid profile, stay on login */ }
+
+      // Cleanup orphaned uploads from interrupted sessions
+      try {
+        const pending = JSON.parse(localStorage.getItem('pending_uploads') || '[]');
+        if (pending.length > 0) {
+          const files = pending
+            .map(u => {
+              const prefix = `${SUPABASE_URL}/storage/v1/object/public/report-images/`;
+              return u.startsWith(prefix) ? u.slice(prefix.length) : null;
+            })
+            .filter(Boolean);
+          if (files.length > 0) {
+            fetch(UPLOAD_URL, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ files }),
+            }).catch(() => {});
+          }
+          localStorage.removeItem('pending_uploads');
+        }
+      } catch { localStorage.removeItem('pending_uploads'); }
     }
     // Load shared categories & tags from DB
     fetchCategories();
@@ -142,6 +163,10 @@ function App() {
 
   /* ─── helpers ─── */
   const getCurrentDate = () => new Date().toISOString().split('T')[0];
+  const getCurrentTime = () => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  };
 
   const showNotif = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -205,10 +230,10 @@ function App() {
         localStorage.setItem('ext_profile', JSON.stringify(data.profile));
         setAuthToken(data.token);
         setUserProfile(data.profile);
-        const today = getCurrentDate();
         setFormData(prev => ({
           ...prev,
-          reportDate: today,
+          reportDate: getCurrentDate(),
+          dutyTime: getCurrentTime(),
           staffName: data.profile.name || '',
           position: data.profile.position || '',
         }));
@@ -236,10 +261,39 @@ function App() {
   };
 
   /* ═══════════════════════════════════════════
-     IMAGE UPLOAD
+     IMAGE COMPRESS & UPLOAD
      ═══════════════════════════════════════════ */
 
-  const uploadImage = async (file) => {
+  const compressImage = (file) => new Promise((resolve) => {
+    // Skip if already small (< 200KB)
+    if (file.size < 200 * 1024) { resolve(file); return; }
+
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1920;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        const ratio = Math.min(MAX / width, MAX / height);
+        width  = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (!blob || blob.size >= file.size) { resolve(file); return; }
+        resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.8);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+
+  const uploadImage = async (rawFile) => {
+    const file = await compressImage(rawFile);
     const ext  = file.name.split('.').pop();
     const name = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
     const res = await fetch(UPLOAD_URL, {
@@ -283,6 +337,7 @@ function App() {
     let current = 0;
     setUploadProgress({ current: 0, total, step: 'upload' });
     const uploadedUrls = []; // track for cleanup on failure
+    localStorage.setItem('pending_uploads', JSON.stringify([]));
     try {
       for (const img of images) {
         if (img.file) {
@@ -290,6 +345,8 @@ function App() {
           setUploadProgress({ current, total, step: 'upload' });
           const url = await uploadImage(img.file);
           uploadedUrls.push(url);
+          // Persist to localStorage so cleanup works even if app is killed
+          localStorage.setItem('pending_uploads', JSON.stringify(uploadedUrls));
         } else if (img.existingUrl) {
           uploadedUrls.push(img.existingUrl);
         }
@@ -298,6 +355,7 @@ function App() {
     } catch (err) {
       // Upload interrupted — delete all successfully uploaded images
       await deleteUploadedImages(uploadedUrls);
+      localStorage.removeItem('pending_uploads');
       throw err;
     }
   };
@@ -337,6 +395,9 @@ function App() {
         location: formData.location ? { name: formData.location } : null,
       }, authToken);
 
+      // Post created successfully — uploads are safe now
+      localStorage.removeItem('pending_uploads');
+
       // Save custom category & tags for future use
       saveCategory(formData.category);
       formData.tags.forEach(t => saveTag(t));
@@ -345,6 +406,7 @@ function App() {
       setFormData(prev => ({
         ...emptyForm,
         reportDate: getCurrentDate(),
+        dutyTime: getCurrentTime(),
         staffName: prev.staffName,
         position: prev.position,
       }));
@@ -353,6 +415,7 @@ function App() {
       if (uploadedImages.length > 0) {
         await deleteUploadedImages(uploadedImages);
       }
+      localStorage.removeItem('pending_uploads');
       if (e.status === 401 && e.error === 'invalid_token') {
         showNotif('Token หมดอายุ กรุณาเข้าสู่ระบบใหม่', 'error');
         handleLogout();
