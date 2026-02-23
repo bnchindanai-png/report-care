@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 
-const API_BASE = 'https://ikfioqvjrhquiyeylmsv.supabase.co/functions/v1';
-const UPLOAD_URL = 'https://ikfioqvjrhquiyeylmsv.supabase.co/functions/v1/upload-report-image';
+const SUPABASE_URL = 'https://ikfioqvjrhquiyeylmsv.supabase.co';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZmlvcXZqcmhxdWl5ZXlsbXN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4MzQ3MTcsImV4cCI6MjA2NjQxMDcxN30.m0RHqLl6RmM5rTN-TU3YrcvHNpSB9FnH_XN_Y3uhhRc';
+const API_BASE = `${SUPABASE_URL}/functions/v1`;
+const REST_BASE = `${SUPABASE_URL}/rest/v1`;
+const UPLOAD_URL = `${API_BASE}/upload-report-image`;
 const MAX_IMAGES = 100;
 
 const BLUE       = '#2196F3';
@@ -57,9 +60,9 @@ function App() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  /* ── Saved categories & tags (localStorage) ── */
-  const [savedCategories, setSavedCategories] = useState([]);
-  const [savedTags, setSavedTags] = useState([]);
+  /* ── Shared categories & tags (DB) ── */
+  const [dbCategories, setDbCategories] = useState([]);
+  const [dbTags, setDbTags] = useState([]);
   const [showCatDropdown, setShowCatDropdown] = useState(false);
 
   /* ── Init: check localStorage ── */
@@ -80,39 +83,61 @@ function App() {
         }));
       } catch { /* invalid profile, stay on login */ }
     }
-    // Load saved categories & tags
-    try {
-      const cats = JSON.parse(localStorage.getItem('saved_categories') || '[]');
-      if (Array.isArray(cats)) setSavedCategories(cats);
-    } catch {}
-    try {
-      const tags = JSON.parse(localStorage.getItem('saved_tags') || '[]');
-      if (Array.isArray(tags)) setSavedTags(tags);
-    } catch {}
+    // Load shared categories & tags from DB
+    fetchCategories();
+    fetchTags();
   }, []);
 
-  /* ── helpers: persist categories & tags ── */
-  const allCategories = [...new Set([...DEFAULT_CATEGORIES, ...savedCategories])];
+  /* ── helpers: fetch & persist categories & tags via REST API ── */
+  const restHeaders = { 'apikey': ANON_KEY, 'Content-Type': 'application/json' };
 
-  const saveCategory = (cat) => {
-    if (!cat || DEFAULT_CATEGORIES.includes(cat)) return;
-    setSavedCategories(prev => {
-      const next = [...new Set([...prev, cat])];
-      localStorage.setItem('saved_categories', JSON.stringify(next));
-      return next;
-    });
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch(`${REST_BASE}/shared_categories?select=name&order=id`, { headers: restHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        setDbCategories(data.map(r => r.name));
+      }
+    } catch {}
   };
 
-  const saveTag = (tag) => {
+  const fetchTags = async () => {
+    try {
+      const res = await fetch(`${REST_BASE}/shared_tags?select=name&order=id`, { headers: restHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        setDbTags(data.map(r => r.name));
+      }
+    } catch {}
+  };
+
+  const allCategories = [...new Set([...DEFAULT_CATEGORIES, ...dbCategories])];
+
+  const saveCategory = async (cat) => {
+    if (!cat) return;
+    try {
+      await fetch(`${REST_BASE}/shared_categories`, {
+        method: 'POST',
+        headers: { ...restHeaders, 'Prefer': 'resolution=ignore-duplicates' },
+        body: JSON.stringify({ name: cat }),
+      });
+      if (!dbCategories.includes(cat)) setDbCategories(prev => [...prev, cat]);
+    } catch {}
+  };
+
+  const saveTag = async (tag) => {
     if (!tag) return;
-    setSavedTags(prev => {
-      const next = [...new Set([...prev, tag])];
-      localStorage.setItem('saved_tags', JSON.stringify(next));
-      return next;
-    });
+    try {
+      await fetch(`${REST_BASE}/shared_tags`, {
+        method: 'POST',
+        headers: { ...restHeaders, 'Prefer': 'resolution=ignore-duplicates' },
+        body: JSON.stringify({ name: tag }),
+      });
+      if (!dbTags.includes(tag)) setDbTags(prev => [...prev, tag]);
+    } catch {}
   };
 
-  const allSavedTags = [...new Set([...savedTags])];
+  const allSavedTags = [...new Set([...dbTags])];
 
   /* ─── helpers ─── */
   const getCurrentDate = () => new Date().toISOString().split('T')[0];
