@@ -241,6 +241,23 @@ function App() {
           position: p.position || '',
           workplace: p.workplace || '',
         }));
+
+        // Refresh profile from DB to get latest data (e.g. workplace updates)
+        fetch(`${API_BASE}/get-my-profile`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        }).then(r => r.ok ? r.json() : null).then(data => {
+          if (data?.success && data.profile) {
+            const fresh = data.profile;
+            localStorage.setItem('ext_profile', JSON.stringify(fresh));
+            setUserProfile(fresh);
+            setFormData(prev => ({
+              ...prev,
+              staffName: fresh.name || prev.staffName,
+              position: fresh.position || prev.position,
+              workplace: fresh.workplace || prev.workplace,
+            }));
+          }
+        }).catch(() => {});
       } catch { /* invalid profile, stay on login */ }
 
       // Cleanup orphaned uploads from interrupted sessions
