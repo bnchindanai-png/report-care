@@ -5,48 +5,56 @@ const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 const API_BASE = `${SUPABASE_URL}/functions/v1`;
 const REST_BASE = `${SUPABASE_URL}/rest/v1`;
 const UPLOAD_URL = `${API_BASE}/upload-report-image`;
-const MAX_IMAGES = 100;
 
 const BLUE       = '#2196F3';
 const DARK_BLUE  = '#1976D2';
 const LIGHT_BLUE = '#E3F2FD';
+
+/* ─── Dropdown Options ─── */
+const SERVICE_UNITS = [
+  'หน่วยบริการเมืองลพบุรี', 'หน่วยบริการพัฒนานิคม', 'หน่วยบริการโคกสำโรง',
+  'หน่วยบริการชัยบาดาล', 'หน่วยบริการท่าวุ้ง', 'หน่วยบริการบ้านหมี่',
+  'หน่วยบริการท่าหลวง', 'หน่วยบริการสระโบสถ์', 'หน่วยบริการโคกเจริญ',
+  'หน่วยบริการลำสนธิ', 'หน่วยบริการหนองม่วง',
+];
+
+const DISABILITY_TYPES = [
+  'บกพร่องทางการเห็น', 'บกพร่องทางการได้ยิน', 'บกพร่องทางสติปัญญา',
+  'บกพร่องทางร่างกายหรือการเคลื่อนไหวหรือสุขภาพ',
+  'บกพร่องทางการเรียนรู้', 'บกพร่องทางการพูดและภาษา',
+  'บกพร่องทางพฤติกรรมหรืออารมณ์', 'ออทิสติก', 'พิการซ้ำซ้อน',
+];
 
 /* ─── Report Types Config ─── */
 const REPORT_TYPES = {
   duty: {
     key: 'duty', label: 'ดูแลนักเรียน (ศูนย์ฯ)',
     fullName: 'ดูแลนักเรียน (ศูนย์ฯ)',
-    icon: '📋', formType: 'duty',
+    icon: '📋', formType: 'duty', maxImages: 5,
     colors: { primary: '#2196F3', dark: '#1976D2', light: '#E3F2FD' },
   },
   lunch: {
     key: 'lunch', label: 'อาหารกลางวัน (หน่วยฯ)',
     fullName: 'อาหารกลางวัน (หน่วยฯ)',
-    icon: '🍱', formType: 'lunch',
+    icon: '🍱', formType: 'lunch', maxImages: 5,
     colors: { primary: '#4CAF50', dark: '#388E3C', light: '#E8F5E9' },
   },
-  early_service: {
-    key: 'early_service', label: 'บริการ EI (หน่วยฯ)',
-    fullName: 'บริการ EI (หน่วยฯ)',
-    icon: '🤝', formType: 'service',
+  ei_service: {
+    key: 'ei_service', label: 'บริการ EI',
+    fullName: 'บริการ EI',
+    icon: '🤝', formType: 'ei_service', maxImages: 5,
     colors: { primary: '#FF9800', dark: '#F57C00', light: '#FFF3E0' },
   },
-  early_center: {
-    key: 'early_center', label: 'บริการ EI (ศูนย์ฯ)',
-    fullName: 'บริการ EI (ศูนย์ฯ)',
-    icon: '🏫', formType: 'service',
-    colors: { primary: '#9C27B0', dark: '#7B1FA2', light: '#F3E5F5' },
-  },
   student_dev: {
-    key: 'student_dev', label: 'พัฒนาผู้เรียน (Online/Onsite)',
+    key: 'student_dev', label: 'พัฒนาผู้เรียน',
     fullName: 'พัฒนาผู้เรียน (Online/Onsite)',
-    icon: '📚', formType: 'student_dev',
+    icon: '📚', formType: 'student_dev', maxImages: 5,
     colors: { primary: '#00BCD4', dark: '#0097A7', light: '#E0F7FA' },
   },
   other: {
     key: 'other', label: 'อื่นๆ',
     fullName: '',
-    icon: '📝', formType: 'other',
+    icon: '📝', formType: 'other', maxImages: 99,
     colors: { primary: '#607D8B', dark: '#455A64', light: '#ECEFF1' },
   },
 };
@@ -67,8 +75,8 @@ const buildTitle = (form, reportType) => {
   switch (type.formType) {
     case 'duty':        return form.activity || type.fullName;
     case 'lunch':       return type.fullName;
-    case 'service':     return type.fullName;
-    case 'student_dev': return `${type.fullName} - ${form.studentName || ''}`.trim();
+    case 'ei_service':  return type.fullName;
+    case 'student_dev': return `${type.fullName} - ${form.serviceUnit || ''}`.trim();
     case 'other':       return form.customCategoryName || 'อื่นๆ';
     default:            return form.activity || '-';
   }
@@ -89,20 +97,28 @@ const buildDescription = (form, reportType) => {
       parts.push(`หน่วยบริการ: ${form.workplace || '-'}`);
       if (form.note) parts.push(`หมายเหตุ: ${form.note}`);
       return parts.length > 0 ? parts.join('\n') : '-';
-    case 'service':
-    case 'other':
-      if (form.serviceDetail) parts.push(form.serviceDetail);
-      if (form.note) parts.push(`หมายเหตุ: ${form.note}`);
-      return parts.length > 0 ? parts.join('\n') : '-';
+    case 'ei_service':
+      parts.push(`หน่วยบริการ: ${form.workplace || '-'}`);
+      parts.push(`จำนวนนักเรียน: ${form.studentCount || '-'}`);
+      parts.push(`จำนวนผู้ปกครอง: ${form.parentCount || '-'}`);
+      parts.push(`กิจกรรมการจัดให้บริการ: ${form.serviceActivity || '-'}`);
+      if (form.note) parts.push(`อื่นๆ: ${form.note}`);
+      return parts.join('\n');
     case 'student_dev':
       parts.push(`รูปแบบ: ${form.learningMode || '-'}`);
-      parts.push(`ชื่อผู้เรียน: ${form.studentName || '-'}`);
-      parts.push(`ประเภทความพิการ: ${form.disabilityType || '-'}`);
+      parts.push(`หน่วยบริการ: ${form.serviceUnit || '-'}`);
+      parts.push(`กิจกรรมการสอน: ${form.teachingActivity || '-'}`);
+      if (form.students.length > 0)
+        parts.push(`ผู้เรียน:\n${form.students.map((s, i) => `  ${i + 1}. ${s.name} (${s.disabilityType})`).join('\n')}`);
       if (form.learningActivities.length > 0)
         parts.push(`กิจกรรมการเรียนรู้:\n${form.learningActivities.map((a, i) => `  ${i + 1}. ${a}`).join('\n')}`);
+      if (form.guidance) parts.push(`การให้คำแนะนำ: ${form.guidance}`);
       if (form.obstacles.length > 0)
         parts.push(`ปัญหา/อุปสรรค:\n${form.obstacles.map((o, i) => `  ${i + 1}. ${o}`).join('\n')}`);
       return parts.join('\n');
+    case 'other':
+      if (form.note) parts.push(`หมายเหตุ: ${form.note}`);
+      return parts.length > 0 ? parts.join('\n') : '-';
     default:
       return '-';
   }
@@ -133,19 +149,21 @@ const buildFormData = (form, reportType) => {
       return { ...base, activity: form.activity, eventDetail: form.eventDetail, note: form.note, dutyExchanges: form.dutyExchanges };
     case 'lunch':
       return { ...base, workplace: form.workplace, note: form.note };
-    case 'service':
-      return { ...base, serviceDetail: form.serviceDetail, note: form.note };
+    case 'ei_service':
+      return { ...base, workplace: form.workplace, studentCount: form.studentCount, parentCount: form.parentCount, serviceActivity: form.serviceActivity, note: form.note };
     case 'student_dev':
       return {
         ...base,
         learningMode: form.learningMode,
-        studentName: form.studentName,
-        disabilityType: form.disabilityType,
+        serviceUnit: form.serviceUnit,
+        teachingActivity: form.teachingActivity,
+        students: form.students,
         learningActivities: form.learningActivities,
+        guidance: form.guidance,
         obstacles: form.obstacles,
       };
     case 'other':
-      return { ...base, customCategoryName: form.customCategoryName, serviceDetail: form.serviceDetail, note: form.note };
+      return { ...base, customCategoryName: form.customCategoryName, note: form.note };
     default:
       return base;
   }
@@ -173,16 +191,22 @@ function App() {
     location: '', activity: '', eventDetail: '', note: '',
     tags: [], tagInput: '',
     images: [],
-    serviceDetail: '',
-    learningMode: '', studentName: '', disabilityType: '',
+    learningMode: '',
     learningActivities: [], learningActivityInput: '',
     obstacles: [], obstacleInput: '',
     customCategoryName: '',
     workplace: '',
     dutyExchanges: [],
     dutyExchangeA: '', dutyExchangeB: '',
+    // EI fields
+    studentCount: '', parentCount: '', serviceActivity: '',
+    // Student Dev fields
+    serviceUnit: '', teachingActivity: '',
+    students: [], studentNameInput: '', studentDisabilityInput: '',
+    guidance: '',
   };
   const [formData,   setFormData]   = useState(emptyForm);
+  const [studentDevStep, setStudentDevStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, step: '' });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -569,7 +593,7 @@ function App() {
 
   const addImageToForm = (file) => {
     setFormData(p => {
-      if (p.images.length >= MAX_IMAGES) return p;
+      if (p.images.length >= (typeConfig?.maxImages || 5)) return p;
       return { ...p, images: [...p.images, { file, preview: URL.createObjectURL(file), existingUrl: null }] };
     });
   };
@@ -585,6 +609,7 @@ function App() {
   const handleSelectType = (key) => {
     setReportType(key);
     setReportStep('form');
+    setStudentDevStep(1);
     setFormData(prev => ({
       ...emptyForm,
       reportDate: getCurrentDate(),
@@ -604,7 +629,7 @@ function App() {
     if (!type) return;
 
     // Common validation
-    const needsLocation = type.formType !== 'lunch';
+    const needsLocation = type.formType === 'duty';
     if (!formData.reportDate || !formData.dutyTime || (needsLocation && !formData.location) || formData.images.length === 0) {
       const msg = needsLocation
         ? 'กรุณากรอกข้อมูลที่จำเป็นให้ครบ (วันที่, เวลา, สถานที่, รูปถ่าย)'
@@ -622,23 +647,22 @@ function App() {
         }
         break;
       case 'lunch':
-        // ไม่มี required fields เพิ่มเติม (workplace มาจาก profile, note ไม่บังคับ)
         break;
-      case 'service':
-        if (!formData.serviceDetail) {
-          showNotif('กรุณากรอกรายละเอียดที่ปฏิบัติ', 'error');
+      case 'ei_service':
+        if (!formData.studentCount || !formData.parentCount || !formData.serviceActivity) {
+          showNotif('กรุณากรอกข้อมูลที่จำเป็นให้ครบ (จำนวนนักเรียน, จำนวนผู้ปกครอง, กิจกรรมการจัดให้บริการ)', 'error');
           return;
         }
         break;
       case 'student_dev':
-        if (!formData.learningMode || !formData.studentName || !formData.disabilityType || formData.learningActivities.length === 0) {
-          showNotif('กรุณากรอกข้อมูลที่จำเป็นให้ครบ (รูปแบบ, ชื่อผู้เรียน, ประเภทความพิการ, กิจกรรมการเรียนรู้)', 'error');
+        if (!formData.learningMode || !formData.serviceUnit || !formData.teachingActivity || formData.students.length === 0 || formData.learningActivities.length === 0) {
+          showNotif('กรุณากรอกข้อมูลที่จำเป็นให้ครบ (รูปแบบ, หน่วยบริการ, กิจกรรมการสอน, ชื่อผู้เรียน, กิจกรรมการเรียนรู้)', 'error');
           return;
         }
         break;
       case 'other':
-        if (!formData.customCategoryName || !formData.serviceDetail) {
-          showNotif('กรุณากรอกชื่อรายงานและรายละเอียด', 'error');
+        if (!formData.customCategoryName) {
+          showNotif('กรุณากรอกชื่อรายงาน', 'error');
           return;
         }
         break;
@@ -658,9 +682,11 @@ function App() {
         category: buildCategory(formData, reportType),
         tags: buildTags(formData, reportType),
         images: uploadedImages,
-        location: type.formType === 'lunch'
-          ? (formData.workplace ? { name: formData.workplace } : null)
-          : (formData.location ? { name: formData.location } : null),
+        location: type.formType === 'duty'
+          ? (formData.location ? { name: formData.location } : null)
+          : type.formType === 'student_dev'
+          ? (formData.serviceUnit ? { name: formData.serviceUnit } : null)
+          : (formData.workplace ? { name: formData.workplace } : null),
         report_type: reportType,
         form_data: buildFormData(formData, reportType),
       }, authToken);
@@ -916,49 +942,52 @@ function App() {
     );
   };
 
-  const renderImagesField = () => (
-    <div>
-      <label style={labelStyle}>
-        รูปถ่าย <span style={{ color: '#f44336', fontSize: 14 }}>*</span>
-        <span style={{ fontWeight: 400, color: '#999', fontSize: 13, marginLeft: 8 }}>
-          ({formData.images.length}/{MAX_IMAGES})
-        </span>
-      </label>
-
-      {formData.images.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8, marginBottom: 12 }}>
-          {formData.images.map((img, idx) => (
-            <div key={idx} style={{ position: 'relative' }}>
-              <img src={img.preview} alt={`รูปที่ ${idx + 1}`}
-                style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 8, border: `2px solid ${colors.light}` }} />
-              <button onClick={() => removeImageFromForm(idx)} style={{
-                position: 'absolute', top: -6, right: -6, width: 22, height: 22,
-                borderRadius: '50%', background: '#f44336', color: 'white',
-                border: 'none', cursor: 'pointer', fontSize: 12, lineHeight: '22px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>✕</button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {formData.images.length < MAX_IMAGES && (
-        <label style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          padding: 16, border: `2px dashed ${colors.primary}50`, borderRadius: 10,
-          cursor: 'pointer', color: colors.primary, fontWeight: 600, fontSize: 15,
-          transition: 'all 0.2s',
-        }}>
-          <span style={{ fontSize: 22 }}>+</span> เพิ่มรูปภาพ
-          <input type="file" accept="image/*" multiple hidden
-            onChange={e => {
-              Array.from(e.target.files).forEach(f => addImageToForm(f));
-              e.target.value = '';
-            }} />
+  const renderImagesField = () => {
+    const maxImages = typeConfig?.maxImages || 5;
+    return (
+      <div>
+        <label style={labelStyle}>
+          รูปถ่าย <span style={{ color: '#f44336', fontSize: 14 }}>*</span>
+          <span style={{ fontWeight: 400, color: '#999', fontSize: 13, marginLeft: 8 }}>
+            ({formData.images.length}/{maxImages})
+          </span>
         </label>
-      )}
-    </div>
-  );
+
+        {formData.images.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8, marginBottom: 12 }}>
+            {formData.images.map((img, idx) => (
+              <div key={idx} style={{ position: 'relative' }}>
+                <img src={img.preview} alt={`รูปที่ ${idx + 1}`}
+                  style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 8, border: `2px solid ${colors.light}` }} />
+                <button onClick={() => removeImageFromForm(idx)} style={{
+                  position: 'absolute', top: -6, right: -6, width: 22, height: 22,
+                  borderRadius: '50%', background: '#f44336', color: 'white',
+                  border: 'none', cursor: 'pointer', fontSize: 12, lineHeight: '22px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {formData.images.length < maxImages && (
+          <label style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: 16, border: `2px dashed ${colors.primary}50`, borderRadius: 10,
+            cursor: 'pointer', color: colors.primary, fontWeight: 600, fontSize: 15,
+            transition: 'all 0.2s',
+          }}>
+            <span style={{ fontSize: 22 }}>+</span> เพิ่มรูปภาพ
+            <input type="file" accept="image/*" multiple hidden
+              onChange={e => {
+                Array.from(e.target.files).forEach(f => addImageToForm(f));
+                e.target.value = '';
+              }} />
+          </label>
+        )}
+      </div>
+    );
+  };
 
   /* ── List input (for learningActivities / obstacles) ── */
   const renderListInput = (listField, inputField, label, placeholder, required) => {
@@ -1037,50 +1066,229 @@ function App() {
     </>
   );
 
-  const renderServiceFields = () => (
+  const renderEIFields = () => (
     <>
       <div>
-        <label style={labelStyle}>รายละเอียดที่ปฏิบัติ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
-        <textarea value={formData.serviceDetail} className="input-field" rows={3}
-          placeholder="รายละเอียดการปฏิบัติงาน"
-          style={{ resize: 'vertical' }}
-          onChange={e => setFormData(p => ({ ...p, serviceDetail: e.target.value }))} />
+        <label style={labelStyle}>จำนวนนักเรียนที่มารับบริการ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+        <input type="number" value={formData.studentCount} className="input-field" placeholder="ระบุจำนวน"
+          inputMode="numeric" min="0"
+          onChange={e => setFormData(p => ({ ...p, studentCount: e.target.value }))} />
       </div>
       <div>
-        <label style={labelStyle}>หมายเหตุ</label>
-        <input type="text" value={formData.note} className="input-field" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"
+        <label style={labelStyle}>จำนวนผู้ปกครองที่มารับบริการ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+        <input type="number" value={formData.parentCount} className="input-field" placeholder="ระบุจำนวน"
+          inputMode="numeric" min="0"
+          onChange={e => setFormData(p => ({ ...p, parentCount: e.target.value }))} />
+      </div>
+      <div>
+        <label style={labelStyle}>กิจกรรมการจัดให้บริการ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+        <textarea value={formData.serviceActivity} className="input-field" rows={3}
+          placeholder="รายละเอียดกิจกรรมการจัดให้บริการ"
+          style={{ resize: 'vertical' }}
+          onChange={e => setFormData(p => ({ ...p, serviceActivity: e.target.value }))} />
+      </div>
+      <div>
+        <label style={labelStyle}>อื่นๆ <span style={{ fontWeight: 400, color: '#999', fontSize: 13 }}>(ไม่บังคับ)</span></label>
+        <input type="text" value={formData.note} className="input-field" placeholder="ข้อมูลเพิ่มเติม (ถ้ามี)"
           onChange={e => setFormData(p => ({ ...p, note: e.target.value }))} />
       </div>
     </>
   );
 
-  const renderStudentDevFields = () => (
-    <>
-      <div>
-        <label style={labelStyle}>รูปแบบ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
-        <select value={formData.learningMode} className="input-field"
-          onChange={e => setFormData(p => ({ ...p, learningMode: e.target.value }))}>
-          <option value="">-- เลือกรูปแบบ --</option>
-          <option value="onsite">Onsite</option>
-          <option value="online">Online</option>
-        </select>
+  const renderStudentDevStep1 = () => {
+    const type = REPORT_TYPES[reportType];
+    return (
+      <div className="fade-in" style={{
+        background: 'white', padding: 25, borderRadius: 15,
+        boxShadow: '0 2px 15px rgba(0,0,0,0.08)',
+        '--theme-primary': colors.primary,
+        '--theme-dark': colors.dark,
+        '--theme-light': colors.light,
+      }}>
+        <button onClick={() => { setReportStep('select'); setReportType(null); }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 0',
+            background: 'none', border: 'none', color: colors.dark,
+            fontSize: 15, fontWeight: 600, cursor: 'pointer', marginBottom: 12,
+            fontFamily: 'Sarabun, sans-serif',
+          }}>
+          ← เลือกประเภทใหม่
+        </button>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          background: colors.light, color: colors.dark, padding: '8px 16px',
+          borderRadius: 20, fontSize: 14, fontWeight: 600, marginBottom: 20,
+          border: `1.5px solid ${colors.primary}30`,
+        }}>
+          <span>{type.icon}</span> {type.label}
+        </div>
+
+        <div style={{ display: 'grid', gap: 18 }}>
+          <div>
+            <label style={labelStyle}>รูปแบบ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+            <select value={formData.learningMode} className="input-field"
+              onChange={e => setFormData(p => ({ ...p, learningMode: e.target.value, serviceUnit: '' }))}>
+              <option value="">-- เลือกรูปแบบ --</option>
+              <option value="Onsite">Onsite</option>
+              <option value="Online">Online</option>
+            </select>
+          </div>
+
+          {formData.learningMode && (
+            <div>
+              <label style={labelStyle}>หน่วยบริการ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+              <select value={formData.serviceUnit} className="input-field"
+                onChange={e => {
+                  const val = e.target.value;
+                  setFormData(p => ({ ...p, serviceUnit: val }));
+                  if (val) setStudentDevStep(2);
+                }}>
+                <option value="">-- เลือกหน่วยบริการ --</option>
+                {SERVICE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
       </div>
-      <div>
-        <label style={labelStyle}>ชื่อผู้เรียน <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
-        <input type="text" value={formData.studentName} className="input-field"
-          placeholder="ระบุชื่อผู้เรียน"
-          onChange={e => setFormData(p => ({ ...p, studentName: e.target.value }))} />
+    );
+  };
+
+  const renderStudentDevStep2 = () => {
+    const type = REPORT_TYPES[reportType];
+    const addStudent = () => {
+      const name = formData.studentNameInput.trim();
+      const disability = formData.studentDisabilityInput;
+      if (name && disability) {
+        setFormData(p => ({
+          ...p,
+          students: [...p.students, { name, disabilityType: disability }],
+          studentNameInput: '', studentDisabilityInput: '',
+        }));
+      }
+    };
+    const removeStudent = (idx) => {
+      setFormData(p => ({ ...p, students: p.students.filter((_, i) => i !== idx) }));
+    };
+    const teachingOptions = formData.serviceUnit
+      ? ['ที่บ้าน', `ที่${formData.serviceUnit}`]
+      : ['ที่บ้าน'];
+
+    return (
+      <div className="fade-in" style={{
+        background: 'white', padding: 25, borderRadius: 15,
+        boxShadow: '0 2px 15px rgba(0,0,0,0.08)',
+        '--theme-primary': colors.primary,
+        '--theme-dark': colors.dark,
+        '--theme-light': colors.light,
+      }}>
+        <button onClick={() => setStudentDevStep(1)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 0',
+            background: 'none', border: 'none', color: colors.dark,
+            fontSize: 15, fontWeight: 600, cursor: 'pointer', marginBottom: 12,
+            fontFamily: 'Sarabun, sans-serif',
+          }}>
+          ← กลับ
+        </button>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          background: colors.light, color: colors.dark, padding: '8px 16px',
+          borderRadius: 20, fontSize: 14, fontWeight: 600, marginBottom: 12,
+          border: `1.5px solid ${colors.primary}30`,
+        }}>
+          <span>{type.icon}</span> {type.label}
+        </div>
+
+        {/* Summary from step 1 */}
+        <div style={{
+          background: '#f8f9fa', padding: '10px 14px', borderRadius: 10,
+          fontSize: 13, color: '#555', marginBottom: 20, lineHeight: 1.6,
+        }}>
+          <span style={{ fontWeight: 600 }}>รูปแบบ:</span> {formData.learningMode} &nbsp;|&nbsp;
+          <span style={{ fontWeight: 600 }}>หน่วยบริการ:</span> {formData.serviceUnit}
+        </div>
+
+        <div style={{ display: 'grid', gap: 18 }}>
+          {renderDateTimeFields()}
+          {renderTagsField()}
+          {renderStaffFields()}
+
+          {/* กิจกรรมการสอน */}
+          <div>
+            <label style={labelStyle}>กิจกรรมการสอน <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+            <select value={formData.teachingActivity} className="input-field"
+              onChange={e => setFormData(p => ({ ...p, teachingActivity: e.target.value }))}>
+              <option value="">-- เลือกกิจกรรมการสอน --</option>
+              {teachingOptions.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+
+          {/* ชื่อผู้เรียน + ประเภทความพิการ */}
+          <div>
+            <label style={labelStyle}>ชื่อผู้เรียน <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <input type="text" value={formData.studentNameInput} className="input-field"
+                placeholder="ชื่อผู้เรียน" style={{ flex: 1, minWidth: 120 }}
+                onChange={e => setFormData(p => ({ ...p, studentNameInput: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addStudent(); } }}
+              />
+              <select value={formData.studentDisabilityInput} className="input-field"
+                style={{ flex: 1, minWidth: 140 }}
+                onChange={e => setFormData(p => ({ ...p, studentDisabilityInput: e.target.value }))}>
+                <option value="">-- ประเภทความพิการ --</option>
+                {DISABILITY_TYPES.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+              <button type="button" onClick={addStudent}
+                style={{
+                  padding: '0 14px', height: 44, background: colors.primary, color: 'white', border: 'none',
+                  borderRadius: 8, fontSize: 18, cursor: 'pointer', fontWeight: 700,
+                }}>+</button>
+            </div>
+            {formData.students.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                {formData.students.map((s, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    background: colors.light, padding: '8px 12px', borderRadius: 8, marginBottom: 4,
+                    fontSize: 14,
+                  }}>
+                    <span style={{ color: colors.dark }}>
+                      {idx + 1}. {s.name} ({s.disabilityType})
+                    </span>
+                    <button onClick={() => removeStudent(idx)}
+                      style={{ background: 'none', border: 'none', color: '#f44336', cursor: 'pointer', fontSize: 16, padding: '0 4px' }}>
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {renderListInput('learningActivities', 'learningActivityInput', 'กิจกรรมการเรียนรู้', 'พิมพ์กิจกรรมแล้วกด +', true)}
+
+          {/* การให้คำแนะนำ */}
+          <div>
+            <label style={labelStyle}>การให้คำแนะนำ <span style={{ fontWeight: 400, color: '#999', fontSize: 13 }}>(ไม่บังคับ)</span></label>
+            <textarea value={formData.guidance} className="input-field" rows={2}
+              placeholder="การให้คำแนะนำ (ถ้ามี)"
+              style={{ resize: 'vertical' }}
+              onChange={e => setFormData(p => ({ ...p, guidance: e.target.value }))} />
+          </div>
+
+          {renderListInput('obstacles', 'obstacleInput', 'ปัญหา/อุปสรรค', 'พิมพ์ปัญหา/อุปสรรคแล้วกด +', false)}
+
+          {renderImagesField()}
+        </div>
+
+        {/* Submit */}
+        <button className="save-btn" onClick={handleSubmit} disabled={submitting}
+          style={{ background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.dark} 100%)` }}>
+          {submitting ? 'กำลังบันทึก...' : 'บันทึกรายงาน'}
+        </button>
       </div>
-      <div>
-        <label style={labelStyle}>ประเภทความพิการ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
-        <input type="text" value={formData.disabilityType} className="input-field"
-          placeholder="ระบุประเภทความพิการ"
-          onChange={e => setFormData(p => ({ ...p, disabilityType: e.target.value }))} />
-      </div>
-      {renderListInput('learningActivities', 'learningActivityInput', 'กิจกรรมการเรียนรู้', 'พิมพ์กิจกรรมแล้วกด +', true)}
-      {renderListInput('obstacles', 'obstacleInput', 'ปัญหา/อุปสรรค', 'พิมพ์ปัญหา/อุปสรรคแล้วกด +', false)}
-    </>
-  );
+    );
+  };
 
   const renderOtherFields = () => (
     <>
@@ -1090,13 +1298,23 @@ function App() {
           placeholder="พิมพ์ชื่อรายงาน"
           onChange={e => setFormData(p => ({ ...p, customCategoryName: e.target.value }))} />
       </div>
-      {renderServiceFields()}
+      <div>
+        <label style={labelStyle}>หมายเหตุ <span style={{ fontWeight: 400, color: '#999', fontSize: 13 }}>(ไม่บังคับ)</span></label>
+        <input type="text" value={formData.note} className="input-field" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"
+          onChange={e => setFormData(p => ({ ...p, note: e.target.value }))} />
+      </div>
     </>
   );
 
   /* ── Form (Step 2) ── */
   const renderForm = () => {
     const type = REPORT_TYPES[reportType];
+
+    // student_dev uses its own 2-step layout
+    if (type.formType === 'student_dev') {
+      return studentDevStep === 1 ? renderStudentDevStep1() : renderStudentDevStep2();
+    }
+
     return (
       <div className="fade-in" style={{
         background: 'white', padding: 25, borderRadius: 15,
@@ -1131,14 +1349,13 @@ function App() {
           {renderDateTimeFields()}
           {renderTagsField()}
           {renderStaffFields()}
-          {type.formType !== 'lunch' && renderLocationField()}
-          {type.formType === 'lunch' && renderWorkplaceField()}
+          {type.formType === 'duty' && renderLocationField()}
+          {['lunch', 'ei_service', 'other'].includes(type.formType) && renderWorkplaceField()}
 
           {/* Type-specific fields */}
           {type.formType === 'duty' && renderDutyFields()}
-          {type.formType === 'service' && renderServiceFields()}
           {type.formType === 'lunch' && renderLunchFields()}
-          {type.formType === 'student_dev' && renderStudentDevFields()}
+          {type.formType === 'ei_service' && renderEIFields()}
           {type.formType === 'other' && renderOtherFields()}
 
           {renderImagesField()}
