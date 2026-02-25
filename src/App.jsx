@@ -94,13 +94,13 @@ const buildDescription = (form, reportType) => {
         parts.push(`การแลกเปลี่ยน:\n${form.dutyExchanges.map(e => `  ${e.personA} ↔ ${e.personB}`).join('\n')}`);
       return parts.length > 0 ? parts.join('\n') : (form.activity || '-');
     case 'lunch':
-      parts.push(`หน่วยบริการ: ${form.workplace || '-'}`);
+      parts.push(`ห้องเรียน/หน่วยบริการ: ${form.workplace || '-'}`);
       if (form.foodMenus?.length > 0)
         parts.push(`เมนูอาหาร:\n${form.foodMenus.map((m, i) => `  ${i + 1}. ${m}`).join('\n')}`);
       if (form.note) parts.push(`หมายเหตุ: ${form.note}`);
       return parts.length > 0 ? parts.join('\n') : '-';
     case 'ei_service':
-      parts.push(`หน่วยบริการ: ${form.workplace || '-'}`);
+      parts.push(`ห้องเรียน/หน่วยบริการ: ${form.workplace || '-'}`);
       parts.push(`จำนวนนักเรียน: ${form.studentCount || '-'}`);
       parts.push(`จำนวนผู้ปกครอง: ${form.parentCount || '-'}`);
       parts.push(`กิจกรรมการจัดให้บริการ: ${form.serviceActivity || '-'}`);
@@ -108,7 +108,7 @@ const buildDescription = (form, reportType) => {
       return parts.join('\n');
     case 'student_dev':
       parts.push(`รูปแบบ: ${form.learningMode || '-'}`);
-      parts.push(`หน่วยบริการ: ${form.serviceUnit || '-'}`);
+      parts.push(`ห้องเรียน/หน่วยบริการ: ${form.serviceUnit || '-'}`);
       parts.push(`กิจกรรมการสอน: ${form.teachingActivity || '-'}`);
       if (form.students.length > 0)
         parts.push(`ผู้เรียน:\n${form.students.map((s, i) => `  ${i + 1}. ${s.name} (${s.disabilityType})`).join('\n')}`);
@@ -120,7 +120,7 @@ const buildDescription = (form, reportType) => {
       return parts.join('\n');
     case 'other':
       if (form.note) parts.push(`หมายเหตุ: ${form.note}`);
-      return parts.length > 0 ? parts.join('\n') : '-';
+      return parts.length > 0 ? parts.join('\n') : '';
     default:
       return '-';
   }
@@ -676,7 +676,7 @@ function App() {
         break;
       case 'student_dev':
         if (!formData.learningMode || !formData.serviceUnit || !formData.teachingActivity || formData.students.length === 0 || formData.learningActivities.length === 0) {
-          showNotif('กรุณากรอกข้อมูลที่จำเป็นให้ครบ (รูปแบบ, หน่วยบริการ, กิจกรรมการสอน, ชื่อผู้เรียน, กิจกรรมการเรียนรู้)', 'error');
+          showNotif('กรุณากรอกข้อมูลที่จำเป็นให้ครบ (รูปแบบ, ห้องเรียน/หน่วยบริการ, กิจกรรมการสอน, ชื่อผู้เรียน, กิจกรรมการเรียนรู้)', 'error');
           return;
         }
         break;
@@ -884,7 +884,7 @@ function App() {
 
   const renderWorkplaceField = () => (
     <div>
-      <label style={labelStyle}>หน่วยบริการ</label>
+      <label style={labelStyle}>ห้องเรียน/หน่วยบริการ</label>
       <input type="text" value={formData.workplace} className="input-field"
         readOnly style={{ background: '#f5f5f5', color: '#666' }} />
     </div>
@@ -1200,14 +1200,14 @@ function App() {
 
           {formData.learningMode && (
             <div>
-              <label style={labelStyle}>หน่วยบริการ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+              <label style={labelStyle}>ห้องเรียน/หน่วยบริการ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
               <select value={formData.serviceUnit} className="input-field"
                 onChange={e => {
                   const val = e.target.value;
                   setFormData(p => ({ ...p, serviceUnit: val }));
                   if (val) setStudentDevStep(2);
                 }}>
-                <option value="">-- เลือกหน่วยบริการ --</option>
+                <option value="">-- เลือกห้องเรียน/หน่วยบริการ --</option>
                 {SERVICE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
@@ -1269,7 +1269,7 @@ function App() {
           fontSize: 13, color: '#555', marginBottom: 20, lineHeight: 1.6,
         }}>
           <span style={{ fontWeight: 600 }}>รูปแบบ:</span> {formData.learningMode} &nbsp;|&nbsp;
-          <span style={{ fontWeight: 600 }}>หน่วยบริการ:</span> {formData.serviceUnit}
+          <span style={{ fontWeight: 600 }}>ห้องเรียน/หน่วยบริการ:</span> {formData.serviceUnit}
         </div>
 
         <div style={{ display: 'grid', gap: 18 }}>
