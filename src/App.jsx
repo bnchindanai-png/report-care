@@ -22,7 +22,7 @@ const REPORT_TYPES = {
   lunch: {
     key: 'lunch', label: 'อาหารกลางวัน (หน่วยฯ)',
     fullName: 'อาหารกลางวัน (หน่วยฯ)',
-    icon: '🍱', formType: 'service',
+    icon: '🍱', formType: 'lunch',
     colors: { primary: '#4CAF50', dark: '#388E3C', light: '#E8F5E9' },
   },
   early_service: {
@@ -66,6 +66,7 @@ const buildTitle = (form, reportType) => {
   if (!type) return form.activity || '-';
   switch (type.formType) {
     case 'duty':        return form.activity || type.fullName;
+    case 'lunch':       return type.fullName;
     case 'service':     return type.fullName;
     case 'student_dev': return `${type.fullName} - ${form.studentName || ''}`.trim();
     case 'other':       return form.customCategoryName || 'อื่นๆ';
@@ -81,7 +82,13 @@ const buildDescription = (form, reportType) => {
     case 'duty':
       if (form.eventDetail) parts.push(form.eventDetail);
       if (form.note) parts.push(`หมายเหตุ: ${form.note}`);
+      if (form.dutyExchanges?.length > 0)
+        parts.push(`การแลกเปลี่ยน:\n${form.dutyExchanges.map(e => `  ${e.personA} ↔ ${e.personB}`).join('\n')}`);
       return parts.length > 0 ? parts.join('\n') : (form.activity || '-');
+    case 'lunch':
+      parts.push(`หน่วยบริการ: ${form.workplace || '-'}`);
+      if (form.note) parts.push(`หมายเหตุ: ${form.note}`);
+      return parts.length > 0 ? parts.join('\n') : '-';
     case 'service':
     case 'other':
       if (form.serviceDetail) parts.push(form.serviceDetail);
@@ -123,7 +130,9 @@ const buildFormData = (form, reportType) => {
   };
   switch (type.formType) {
     case 'duty':
-      return { ...base, activity: form.activity, eventDetail: form.eventDetail, note: form.note };
+      return { ...base, activity: form.activity, eventDetail: form.eventDetail, note: form.note, dutyExchanges: form.dutyExchanges };
+    case 'lunch':
+      return { ...base, workplace: form.workplace, note: form.note };
     case 'service':
       return { ...base, serviceDetail: form.serviceDetail, note: form.note };
     case 'student_dev':
@@ -169,6 +178,9 @@ function App() {
     learningActivities: [], learningActivityInput: '',
     obstacles: [], obstacleInput: '',
     customCategoryName: '',
+    workplace: '',
+    dutyExchanges: [],
+    dutyExchangeA: '', dutyExchangeB: '',
   };
   const [formData,   setFormData]   = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
@@ -203,6 +215,7 @@ function App() {
           dutyTime: getCurrentTime(),
           staffName: p.name || '',
           position: p.position || '',
+          workplace: p.workplace || '',
         }));
       } catch { /* invalid profile, stay on login */ }
 
@@ -394,6 +407,7 @@ function App() {
           dutyTime: getCurrentTime(),
           staffName: data.profile.name || '',
           position: data.profile.position || '',
+          workplace: data.profile.workplace || '',
         }));
         showNotif('เข้าสู่ระบบสำเร็จ', 'success');
       }
@@ -577,6 +591,7 @@ function App() {
       dutyTime: getCurrentTime(),
       staffName: prev.staffName,
       position: prev.position,
+      workplace: prev.workplace,
     }));
   };
 
@@ -589,8 +604,12 @@ function App() {
     if (!type) return;
 
     // Common validation
-    if (!formData.reportDate || !formData.dutyTime || !formData.location || formData.images.length === 0) {
-      showNotif('กรุณากรอกข้อมูลที่จำเป็นให้ครบ (วันที่, เวลา, สถานที่, รูปถ่าย)', 'error');
+    const needsLocation = type.formType !== 'lunch';
+    if (!formData.reportDate || !formData.dutyTime || (needsLocation && !formData.location) || formData.images.length === 0) {
+      const msg = needsLocation
+        ? 'กรุณากรอกข้อมูลที่จำเป็นให้ครบ (วันที่, เวลา, สถานที่, รูปถ่าย)'
+        : 'กรุณากรอกข้อมูลที่จำเป็นให้ครบ (วันที่, เวลา, รูปถ่าย)';
+      showNotif(msg, 'error');
       return;
     }
 
@@ -601,6 +620,9 @@ function App() {
           showNotif('กรุณากรอกกิจกรรมที่ปฏิบัติ', 'error');
           return;
         }
+        break;
+      case 'lunch':
+        // ไม่มี required fields เพิ่มเติม (workplace มาจาก profile, note ไม่บังคับ)
         break;
       case 'service':
         if (!formData.serviceDetail) {
@@ -636,7 +658,9 @@ function App() {
         category: buildCategory(formData, reportType),
         tags: buildTags(formData, reportType),
         images: uploadedImages,
-        location: formData.location ? { name: formData.location } : null,
+        location: type.formType === 'lunch'
+          ? (formData.workplace ? { name: formData.workplace } : null)
+          : (formData.location ? { name: formData.location } : null),
         report_type: reportType,
         form_data: buildFormData(formData, reportType),
       }, authToken);
@@ -656,6 +680,7 @@ function App() {
         dutyTime: getCurrentTime(),
         staffName: prev.staffName,
         position: prev.position,
+        workplace: prev.workplace,
       }));
       setReportStep('select');
       setReportType(null);
@@ -811,6 +836,86 @@ function App() {
     </div>
   );
 
+  const renderWorkplaceField = () => (
+    <div>
+      <label style={labelStyle}>หน่วยบริการ</label>
+      <input type="text" value={formData.workplace} className="input-field"
+        readOnly style={{ background: '#f5f5f5', color: '#666' }} />
+    </div>
+  );
+
+  const renderLunchFields = () => (
+    <>
+      <div>
+        <label style={labelStyle}>หมายเหตุ</label>
+        <input type="text" value={formData.note} className="input-field" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"
+          onChange={e => setFormData(p => ({ ...p, note: e.target.value }))} />
+      </div>
+    </>
+  );
+
+  const renderDutyExchangeField = () => {
+    const addExchange = () => {
+      const a = formData.dutyExchangeA.trim();
+      const b = formData.dutyExchangeB.trim();
+      if (a && b) {
+        setFormData(p => ({
+          ...p,
+          dutyExchanges: [...p.dutyExchanges, { personA: a, personB: b }],
+          dutyExchangeA: '',
+          dutyExchangeB: '',
+        }));
+      }
+    };
+    const removeExchange = (idx) => {
+      setFormData(p => ({ ...p, dutyExchanges: p.dutyExchanges.filter((_, i) => i !== idx) }));
+    };
+    return (
+      <div>
+        <label style={labelStyle}>การแลกเปลี่ยนการปฏิบัติหน้าที่ <span style={{ fontWeight: 400, color: '#999', fontSize: 13 }}>(ไม่บังคับ)</span></label>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input type="text" value={formData.dutyExchangeA} className="input-field"
+            placeholder="ชื่อคนที่ 1"
+            style={{ flex: 1, minWidth: 100 }}
+            onChange={e => setFormData(p => ({ ...p, dutyExchangeA: e.target.value }))}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addExchange(); } }}
+          />
+          <span style={{ fontSize: 13, color: colors.dark, fontWeight: 600, whiteSpace: 'nowrap' }}>แลกเปลี่ยนกับ</span>
+          <input type="text" value={formData.dutyExchangeB} className="input-field"
+            placeholder="ชื่อคนที่ 2"
+            style={{ flex: 1, minWidth: 100 }}
+            onChange={e => setFormData(p => ({ ...p, dutyExchangeB: e.target.value }))}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addExchange(); } }}
+          />
+          <button type="button" onClick={addExchange}
+            style={{
+              padding: '0 14px', height: 44, background: colors.primary, color: 'white', border: 'none',
+              borderRadius: 8, fontSize: 18, cursor: 'pointer', fontWeight: 700,
+            }}>+</button>
+        </div>
+        {formData.dutyExchanges.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            {formData.dutyExchanges.map((ex, idx) => (
+              <div key={idx} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: colors.light, padding: '8px 12px', borderRadius: 8, marginBottom: 4,
+                fontSize: 14,
+              }}>
+                <span style={{ color: colors.dark }}>
+                  {idx + 1}. {ex.personA} แลกเปลี่ยนการปฏิบัติหน้าที่กับ {ex.personB}
+                </span>
+                <button onClick={() => removeExchange(idx)}
+                  style={{ background: 'none', border: 'none', color: '#f44336', cursor: 'pointer', fontSize: 16, padding: '0 4px' }}>
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderImagesField = () => (
     <div>
       <label style={labelStyle}>
@@ -916,6 +1021,7 @@ function App() {
           style={{ resize: 'vertical' }}
           onChange={e => setFormData(p => ({ ...p, activity: e.target.value }))} />
       </div>
+      {renderDutyExchangeField()}
       <div>
         <label style={labelStyle}>เหตุการณ์และรายละเอียด</label>
         <textarea value={formData.eventDetail} className="input-field" rows={2}
@@ -1025,11 +1131,13 @@ function App() {
           {renderDateTimeFields()}
           {renderTagsField()}
           {renderStaffFields()}
-          {renderLocationField()}
+          {type.formType !== 'lunch' && renderLocationField()}
+          {type.formType === 'lunch' && renderWorkplaceField()}
 
           {/* Type-specific fields */}
           {type.formType === 'duty' && renderDutyFields()}
           {type.formType === 'service' && renderServiceFields()}
+          {type.formType === 'lunch' && renderLunchFields()}
           {type.formType === 'student_dev' && renderStudentDevFields()}
           {type.formType === 'other' && renderOtherFields()}
 
