@@ -94,22 +94,22 @@ const buildDescription = (form, reportType) => {
         parts.push(`การแลกเปลี่ยน:\n${form.dutyExchanges.map(e => `  ${e.personA} ↔ ${e.personB}`).join('\n')}`);
       return parts.length > 0 ? parts.join('\n') : (form.activity || '-');
     case 'lunch':
-      parts.push(`ห้องเรียน/หน่วยบริการ: ${form.workplace || '-'}`);
+      if (form.workplace) parts.push(`ห้องเรียน/หน่วยบริการ: ${form.workplace}`);
       if (form.foodMenus?.length > 0)
         parts.push(`เมนูอาหาร:\n${form.foodMenus.map((m, i) => `  ${i + 1}. ${m}`).join('\n')}`);
       if (form.note) parts.push(`หมายเหตุ: ${form.note}`);
-      return parts.length > 0 ? parts.join('\n') : '-';
+      return parts.length > 0 ? parts.join('\n') : '';
     case 'ei_service':
-      parts.push(`ห้องเรียน/หน่วยบริการ: ${form.workplace || '-'}`);
-      parts.push(`จำนวนนักเรียน: ${form.studentCount || '-'}`);
-      parts.push(`จำนวนผู้ปกครอง: ${form.parentCount || '-'}`);
-      parts.push(`กิจกรรมการจัดให้บริการ: ${form.serviceActivity || '-'}`);
+      if (form.workplace) parts.push(`ห้องเรียน/หน่วยบริการ: ${form.workplace}`);
+      if (form.studentCount) parts.push(`จำนวนนักเรียน: ${form.studentCount}`);
+      if (form.parentCount) parts.push(`จำนวนผู้ปกครอง: ${form.parentCount}`);
+      if (form.serviceActivity) parts.push(`กิจกรรมการจัดให้บริการ: ${form.serviceActivity}`);
       if (form.note) parts.push(`อื่นๆ: ${form.note}`);
-      return parts.join('\n');
+      return parts.length > 0 ? parts.join('\n') : '';
     case 'student_dev':
-      parts.push(`รูปแบบ: ${form.learningMode || '-'}`);
-      parts.push(`ห้องเรียน/หน่วยบริการ: ${form.serviceUnit || '-'}`);
-      parts.push(`กิจกรรมการสอน: ${form.teachingActivity || '-'}`);
+      if (form.learningMode) parts.push(`รูปแบบ: ${form.learningMode}`);
+      if (form.serviceUnit) parts.push(`ห้องเรียน/หน่วยบริการ: ${form.serviceUnit}`);
+      if (form.teachingActivity) parts.push(`กิจกรรมการสอน: ${form.teachingActivity}`);
       if (form.students.length > 0)
         parts.push(`ผู้เรียน:\n${form.students.map((s, i) => `  ${i + 1}. ${s.name} (${s.disabilityType})`).join('\n')}`);
       if (form.learningActivities.length > 0)
@@ -117,7 +117,7 @@ const buildDescription = (form, reportType) => {
       if (form.guidance) parts.push(`การให้คำแนะนำ: ${form.guidance}`);
       if (form.obstacles.length > 0)
         parts.push(`ปัญหา/อุปสรรค:\n${form.obstacles.map((o, i) => `  ${i + 1}. ${o}`).join('\n')}`);
-      return parts.join('\n');
+      return parts.length > 0 ? parts.join('\n') : '';
     case 'other':
       if (form.note) parts.push(`หมายเหตุ: ${form.note}`);
       return parts.length > 0 ? parts.join('\n') : '';
