@@ -95,6 +95,8 @@ const buildDescription = (form, reportType) => {
       return parts.length > 0 ? parts.join('\n') : (form.activity || '-');
     case 'lunch':
       parts.push(`หน่วยบริการ: ${form.workplace || '-'}`);
+      if (form.foodMenus?.length > 0)
+        parts.push(`เมนูอาหาร:\n${form.foodMenus.map((m, i) => `  ${i + 1}. ${m}`).join('\n')}`);
       if (form.note) parts.push(`หมายเหตุ: ${form.note}`);
       return parts.length > 0 ? parts.join('\n') : '-';
     case 'ei_service':
@@ -148,7 +150,7 @@ const buildFormData = (form, reportType) => {
     case 'duty':
       return { ...base, activity: form.activity, eventDetail: form.eventDetail, note: form.note, dutyExchanges: form.dutyExchanges };
     case 'lunch':
-      return { ...base, workplace: form.workplace, note: form.note };
+      return { ...base, workplace: form.workplace, foodMenus: form.foodMenus, note: form.note };
     case 'ei_service':
       return { ...base, workplace: form.workplace, studentCount: form.studentCount, parentCount: form.parentCount, serviceActivity: form.serviceActivity, note: form.note };
     case 'student_dev':
@@ -196,6 +198,7 @@ function App() {
     obstacles: [], obstacleInput: '',
     customCategoryName: '',
     workplace: '',
+    foodMenus: [], foodMenuInput: '',
     dutyExchanges: [],
     dutyExchangeA: '', dutyExchangeB: '',
     // EI fields
@@ -666,8 +669,8 @@ function App() {
       case 'lunch':
         break;
       case 'ei_service':
-        if (!formData.studentCount || !formData.parentCount || !formData.serviceActivity) {
-          showNotif('กรุณากรอกข้อมูลที่จำเป็นให้ครบ (จำนวนนักเรียน, จำนวนผู้ปกครอง, กิจกรรมการจัดให้บริการ)', 'error');
+        if (!formData.serviceActivity) {
+          showNotif('กรุณากรอกกิจกรรมการจัดให้บริการ', 'error');
           return;
         }
         break;
@@ -887,15 +890,59 @@ function App() {
     </div>
   );
 
-  const renderLunchFields = () => (
-    <>
-      <div>
-        <label style={labelStyle}>หมายเหตุ</label>
-        <input type="text" value={formData.note} className="input-field" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"
-          onChange={e => setFormData(p => ({ ...p, note: e.target.value }))} />
-      </div>
-    </>
-  );
+  const renderLunchFields = () => {
+    const addMenu = () => {
+      const val = formData.foodMenuInput.trim();
+      if (val && !formData.foodMenus.includes(val)) {
+        setFormData(p => ({ ...p, foodMenus: [...p.foodMenus, val], foodMenuInput: '' }));
+      }
+    };
+    const removeMenu = (idx) => {
+      setFormData(p => ({ ...p, foodMenus: p.foodMenus.filter((_, i) => i !== idx) }));
+    };
+    return (
+      <>
+        <div>
+          <label style={labelStyle}>เมนูอาหาร</label>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input type="text" value={formData.foodMenuInput} className="input-field"
+              placeholder="พิมพ์เมนูอาหารแล้วกด +"
+              style={{ flex: 1 }}
+              onChange={e => setFormData(p => ({ ...p, foodMenuInput: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addMenu(); } }}
+            />
+            <button type="button" onClick={addMenu}
+              style={{
+                padding: '0 14px', background: colors.primary, color: 'white', border: 'none',
+                borderRadius: 8, fontSize: 18, cursor: 'pointer', fontWeight: 700,
+              }}>+</button>
+          </div>
+          {formData.foodMenus.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              {formData.foodMenus.map((item, idx) => (
+                <div key={idx} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: colors.light, padding: '8px 12px', borderRadius: 8, marginBottom: 4,
+                  fontSize: 14,
+                }}>
+                  <span style={{ color: colors.dark }}>{idx + 1}. {item}</span>
+                  <button onClick={() => removeMenu(idx)}
+                    style={{ background: 'none', border: 'none', color: '#f44336', cursor: 'pointer', fontSize: 16, padding: '0 4px' }}>
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div>
+          <label style={labelStyle}>หมายเหตุ</label>
+          <input type="text" value={formData.note} className="input-field" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"
+            onChange={e => setFormData(p => ({ ...p, note: e.target.value }))} />
+        </div>
+      </>
+    );
+  };
 
   const renderDutyExchangeField = () => {
     const addExchange = () => {
@@ -1086,13 +1133,13 @@ function App() {
   const renderEIFields = () => (
     <>
       <div>
-        <label style={labelStyle}>จำนวนนักเรียนที่มารับบริการ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+        <label style={labelStyle}>จำนวนนักเรียนที่มารับบริการ</label>
         <input type="number" value={formData.studentCount} className="input-field" placeholder="ระบุจำนวน"
           inputMode="numeric" min="0"
           onChange={e => setFormData(p => ({ ...p, studentCount: e.target.value }))} />
       </div>
       <div>
-        <label style={labelStyle}>จำนวนผู้ปกครองที่มารับบริการ <span style={{ color: '#f44336', fontSize: 14 }}>*</span></label>
+        <label style={labelStyle}>จำนวนผู้ปกครองที่มารับบริการ</label>
         <input type="number" value={formData.parentCount} className="input-field" placeholder="ระบุจำนวน"
           inputMode="numeric" min="0"
           onChange={e => setFormData(p => ({ ...p, parentCount: e.target.value }))} />
