@@ -1010,7 +1010,7 @@ function App() {
 
   const renderYoutubeUrlField = () => (
     <div>
-      <label style={labelStyle}>แนบลิงก์ <span style={{ fontWeight: 400, color: '#999', fontSize: 13 }}>(ไม่บังคับ)</span></label>
+      <label style={labelStyle}>แนบลิงค์วีดีโอจาก YouTube <span style={{ fontWeight: 400, color: '#999', fontSize: 13 }}>(ไม่บังคับ)</span></label>
       <input type="url" value={formData.youtubeUrl} className="input-field"
         placeholder="https://youtube.com/..."
         onChange={e => setFormData(p => ({ ...p, youtubeUrl: e.target.value }))} />
