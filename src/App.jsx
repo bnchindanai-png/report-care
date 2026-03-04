@@ -207,6 +207,7 @@ function App() {
     serviceUnit: '', teachingActivity: '',
     students: [], studentNameInput: '', studentDisabilityInput: '',
     guidance: '',
+    youtubeUrl: '',
   };
   const [formData,   setFormData]   = useState(emptyForm);
   const [studentDevStep, setStudentDevStep] = useState(1);
@@ -709,6 +710,7 @@ function App() {
           : (formData.workplace ? { name: formData.workplace } : null),
         report_type: reportType,
         form_data: buildFormData(formData, reportType),
+        youtube_url: formData.youtubeUrl || null,
       }, authToken);
 
       // Post created successfully — commit session & clear pending
@@ -1006,6 +1008,24 @@ function App() {
     );
   };
 
+  const renderYoutubeUrlField = () => (
+    <div>
+      <label style={labelStyle}>แนบลิงก์ <span style={{ fontWeight: 400, color: '#999', fontSize: 13 }}>(ไม่บังคับ)</span></label>
+      <input type="url" value={formData.youtubeUrl} className="input-field"
+        placeholder="https://youtube.com/..."
+        onChange={e => setFormData(p => ({ ...p, youtubeUrl: e.target.value }))} />
+    </div>
+  );
+
+  const moveImage = (from, to) => {
+    setFormData(p => {
+      const imgs = [...p.images];
+      const [item] = imgs.splice(from, 1);
+      imgs.splice(to, 0, item);
+      return { ...p, images: imgs };
+    });
+  };
+
   const renderImagesField = () => {
     const maxImages = typeConfig?.maxImages || 5;
     return (
@@ -1023,12 +1043,35 @@ function App() {
               <div key={idx} style={{ position: 'relative' }}>
                 <img src={img.preview} alt={`รูปที่ ${idx + 1}`}
                   style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 8, border: `2px solid ${colors.light}` }} />
+                {/* ✕ delete */}
                 <button onClick={() => removeImageFromForm(idx)} style={{
                   position: 'absolute', top: -6, right: -6, width: 22, height: 22,
                   borderRadius: '50%', background: '#f44336', color: 'white',
-                  border: 'none', cursor: 'pointer', fontSize: 12, lineHeight: '22px',
+                  border: 'none', cursor: 'pointer', fontSize: 12,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>✕</button>
+                {/* ← → reorder */}
+                <div style={{
+                  position: 'absolute', bottom: 4, left: 0, right: 0,
+                  display: 'flex', justifyContent: 'center', gap: 4,
+                }}>
+                  {idx > 0 && (
+                    <button onClick={() => moveImage(idx, idx - 1)} style={{
+                      width: 24, height: 24, borderRadius: 6,
+                      background: 'rgba(0,0,0,0.55)', color: 'white',
+                      border: 'none', cursor: 'pointer', fontSize: 13,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>‹</button>
+                  )}
+                  {idx < formData.images.length - 1 && (
+                    <button onClick={() => moveImage(idx, idx + 1)} style={{
+                      width: 24, height: 24, borderRadius: 6,
+                      background: 'rgba(0,0,0,0.55)', color: 'white',
+                      border: 'none', cursor: 'pointer', fontSize: 13,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>›</button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -1342,6 +1385,7 @@ function App() {
 
           {renderListInput('obstacles', 'obstacleInput', 'ปัญหา/อุปสรรค', 'พิมพ์ปัญหา/อุปสรรคแล้วกด +', false)}
 
+          {renderYoutubeUrlField()}
           {renderImagesField()}
         </div>
 
@@ -1422,6 +1466,7 @@ function App() {
           {type.formType === 'ei_service' && renderEIFields()}
           {type.formType === 'other' && renderOtherFields()}
 
+          {renderYoutubeUrlField()}
           {renderImagesField()}
         </div>
 
