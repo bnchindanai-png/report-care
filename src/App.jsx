@@ -1567,8 +1567,8 @@ function App() {
                 type="text"
                 className="input-field"
                 value={otp}
-                placeholder="กรอกรหัส 6 หลัก"
-                maxLength={6}
+                placeholder="กรอกรหัส 4 หลัก"
+                maxLength={4}
                 style={{ textAlign: 'center', fontSize: 24, letterSpacing: 8, fontWeight: 700 }}
                 onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
                 onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
