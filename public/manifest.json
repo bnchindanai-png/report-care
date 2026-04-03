@@ -1,0 +1,17 @@
+{
+  "name": "FastReport - ระบบรายงานการปฏิบัติหน้าที่",
+  "short_name": "FastReport",
+  "description": "ระบบรายงานการปฏิบัติหน้าที่ดูแลนักเรียน",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2563EB",
+  "theme_color": "#2563EB",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
